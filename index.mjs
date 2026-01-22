@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import 'renvy';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPTS_DIR = join(__dirname, 'scripts');
 
@@ -42,7 +42,7 @@ app.use('/api/:scriptName', async (req, res) => {
   if (existsSync(scriptPath)) {
     try {
       // Dynamically import the script, forcing a fresh reload
-      const script = await import(scriptPath + `?cacheBust=${now}`);
+      const script = await import(scriptPath + `?cacheBust=${Math.random()}`);
 
       // Run the script and pass Puppeteer instance
       const result = await script.run(req, res, browser);
