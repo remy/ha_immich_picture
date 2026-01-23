@@ -1,0 +1,35 @@
+name: Scraper
+slug: scraper
+version: '1.0.0'
+stage: experimental
+description: Upload, manage, and run custom Puppeteer-based scraping scripts from Home Assistant.
+url: https://github.com/remy/scraper
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: services
+boot: auto
+init: false
+panel_icon: mdi:file-code-outline
+panel_title: Scraper
+panel_admin: false
+ingress: true
+ingress_port: 3000
+ports:
+  '3000/tcp': 3000
+ports_description:
+  '3000/tcp': Optional direct access to the Express UI without ingress.
+map:
+  - type: addon_config
+    read_only: false
+    path: /config
+  - type: share
+    read_only: false
+options:
+  scripts_dir: /config/scripts
+  env_vars:
+    EXAMPLE_API_KEY: ""
+schema:
+  scripts_dir: str
+  env_vars: dict(str)

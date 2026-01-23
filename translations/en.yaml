@@ -1,0 +1,10 @@
+configuration:
+  scripts_dir:
+    name: Scripts directory
+    description: Absolute path inside the container to save uploaded scripts (defaults to /config/scripts, i.e. /addon_configs/<repo>_scraper/scripts).
+  env_vars:
+    name: Environment variables
+    description: Key/value pairs injected into the add-on process (for secrets or API keys). Values are stored in Home Assistant and exposed as environment variables.
+
+network:
+  3000/tcp: Optional direct access to the Express UI without ingress.
