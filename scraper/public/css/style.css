@@ -4,6 +4,11 @@
 :root {
   color-scheme: light dark;
 }
+
+img {
+  color: CanvasText;
+}
+
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   margin: 0;

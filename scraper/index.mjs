@@ -202,6 +202,7 @@ const getBaseHref = (req) => {
 const getScripts = () =>
   readFileEntries(SCRIPTS_DIR)
     .map((entry) => entry.name)
+    .filter((_) => _.startsWith('.') === false)
     .sort();
 
 app.get('/', async (req, res) => {
@@ -235,13 +236,19 @@ app.get('/scripts/content/:fileName', async (req, res) => {
 app.post('/scripts/rename', async (req, res) => {
   const { originalFileName, newName } = req.body || {};
   if (!originalFileName || !newName) {
-    return res.status(400).json({ error: 'Original and new names are required.' });
+    return res
+      .status(400)
+      .json({ error: 'Original and new names are required.' });
   }
 
   try {
     const sanitizedNewName = sanitizeScriptName(newName);
     if (!sanitizedNewName) {
-      return res.status(400).json({ error: 'New name must be alphanumeric with dashes or underscores.' });
+      return res
+        .status(400)
+        .json({
+          error: 'New name must be alphanumeric with dashes or underscores.',
+        });
     }
 
     const original = getResolvedPath(originalFileName);
@@ -253,11 +260,16 @@ app.post('/scripts/rename', async (req, res) => {
     }
 
     if (existsSync(newPath)) {
-      return res.status(409).json({ error: 'A script with that name already exists.' });
+      return res
+        .status(409)
+        .json({ error: 'A script with that name already exists.' });
     }
 
     await rename(original.resolvedPath, newPath);
-    res.json({ message: `Renamed to ${targetFileName}`, scripts: getScripts() });
+    res.json({
+      message: `Renamed to ${targetFileName}`,
+      scripts: getScripts(),
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Unable to rename script.' });
@@ -380,7 +392,9 @@ app.post('/upload-text', async (req, res) => {
     return res.send(html);
   }
 
-  const message = encodeURIComponent(`Saved ${sanitizedName}${SCRIPT_EXTENSION}`);
+  const message = encodeURIComponent(
+    `Saved ${sanitizedName}${SCRIPT_EXTENSION}`
+  );
   return res.redirect(withIngressPath(req, `/?message=${message}`));
 });
 

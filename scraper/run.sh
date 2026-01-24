@@ -12,7 +12,7 @@ if [[ -f "${OPTIONS_FILE}" ]]; then
     RESOLVED_DIR="${CUSTOM_DIR}"
   fi
 
-  mapfile -t ENV_PAIRS < <(jq -r '.env_vars // {} | to_entries[] | "\(.key)=\(.value // "")"' "${OPTIONS_FILE}" 2>/dev/null || true)
+  mapfile -t ENV_PAIRS < <(jq -r '.env_vars // [] | .[]' "${OPTIONS_FILE}" 2>/dev/null || true)
   if [[ ${#ENV_PAIRS[@]} -gt 0 ]]; then
     for pair in "${ENV_PAIRS[@]}"; do
       KEY="${pair%%=*}"

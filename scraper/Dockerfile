@@ -1,4 +1,4 @@
-ARG BUILD_FROM=node:20-bookworm-slim
+ARG BUILD_FROM=node:24-bookworm-slim
 FROM ${BUILD_FROM}
 
 ENV LANG C.UTF-8
