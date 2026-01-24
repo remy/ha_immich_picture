@@ -27,8 +27,8 @@ map:
     read_only: false
 options:
   scripts_dir: /config/scripts
-  env_vars:
-    EXAMPLE_API_KEY: ''
+  env_vars: []
 schema:
   scripts_dir: str
-  env_vars: list(str)
+  env_vars:
+    - str
