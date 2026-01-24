@@ -1,5 +1,6 @@
 .DS_Store
 scripts/*
+*/scripts/*
 .env
 .env.*
 node_modules
