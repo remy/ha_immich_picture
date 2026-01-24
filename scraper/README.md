@@ -1,15 +1,5 @@
 # Scraper
 
-## How to update Docker Hub with the project and dependencies
-
-```sh
-docker build -t remysharp/scrapper:main .
-docker login -u remysharp
-docker push remysharp/scrapper:latest
-```
-
-Once complete, in the container in Portainer in Home Assistant, find the container and then "Recreate" selecting the "Re-pull image" option.
-
 ## Home Assistant add-on
 
 The repository now doubles as a Home Assistant add-on. To test it locally you can either copy the folder into your `/addons` share or add the GitHub repository URL under **Settings → Add-ons → Add-on store → … → Repositories**. Then:
