@@ -3,7 +3,7 @@ slug: scraper
 version: '1.0.0'
 stage: experimental
 description: Upload, manage, and run custom Puppeteer-based scraping scripts from Home Assistant.
-url: https://github.com/remy/scraper
+url: https://github.com/remy/scraper/blob/main/scraper
 arch:
   - amd64
   - aarch64
@@ -29,7 +29,7 @@ map:
 options:
   scripts_dir: /config/scripts
   env_vars:
-    EXAMPLE_API_KEY: ""
+    EXAMPLE_API_KEY: ''
 schema:
   scripts_dir: str
   env_vars: dict(str)
