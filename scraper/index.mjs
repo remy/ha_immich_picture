@@ -10,8 +10,9 @@ import {
 } from 'fs';
 import { promises as fsPromises } from 'fs';
 import { join, dirname, resolve, basename } from 'path';
+import { spawnSync } from 'child_process';
 import { format } from 'util';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import ejs from 'ejs';
 import 'renvy';
 
@@ -37,6 +38,31 @@ const readFileEntries = (dir) => {
     entry.isFile()
   );
 };
+
+function checkSyntax(filePath) {
+  const result = spawnSync(process.execPath, ['--check', filePath], {
+    encoding: 'utf8',
+  });
+
+  if (result.error) {
+    console.error('Failed to run syntax check', result.error);
+    return result.error;
+  }
+
+  if (result.status === 0) {
+    return null;
+  }
+
+  const output = [result.stderr, result.stdout]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+
+  const message = output || `Syntax error detected while checking ${filePath}.`;
+  const error = new Error(message);
+  error.stack = message;
+  return error;
+}
 
 const ensureScriptsDir = () => {
   if (!existsSync(SCRIPTS_DIR)) {
@@ -69,7 +95,7 @@ const escapeHtml = (input = '') =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const scriptTemplate = `export async function run(req, res, browser) {
+const scriptTemplate = `export default async function handler(req, res, browser) {
   const page = await browser.newPage();
   await page.goto('https://example.com');
 
@@ -160,14 +186,59 @@ const toSerializable = (value) => {
   }
 };
 
-const serializeError = (error) => {
+const stripQuery = (value = '') => value.replace(/\?.*?(?=[:)]|$)/, '');
+
+const filterStackTrace = (stack = '', scriptPath = '') => {
+  if (!stack) return stack;
+  const normalizedScriptPath = scriptPath ? scriptPath.replace(/\\/g, '/') : '';
+  const normalizedScriptsDir = SCRIPTS_DIR.replace(/\\/g, '/');
+  const lines = stack.split('\n');
+  const header = lines.shift() || '';
+
+  const isUserFrame = (line = '') => {
+    if (!line) return false;
+    const normalizedLine = line.replace(/\\/g, '/');
+    const lineWithoutQuery = stripQuery(normalizedLine);
+    if (normalizedScriptPath && normalizedLine.includes(normalizedScriptPath)) {
+      return true;
+    }
+    if (
+      normalizedScriptPath &&
+      lineWithoutQuery.includes(normalizedScriptPath)
+    ) {
+      return true;
+    }
+    return (
+      normalizedLine.includes(normalizedScriptsDir) ||
+      lineWithoutQuery.includes(normalizedScriptsDir)
+    );
+  };
+
+  const userFrames = lines.filter(isUserFrame);
+  const fallbackFrames =
+    userFrames.length > 0
+      ? userFrames
+      : lines.filter((line) => line && !line.includes('node:internal'));
+
+  const framesToUse =
+    fallbackFrames.length > 0
+      ? fallbackFrames
+      : scriptPath
+      ? [`    at ${scriptPath}`]
+      : lines;
+
+  const cleanedFrames = framesToUse.map((line) => stripQuery(line));
+  return [header, ...cleanedFrames].join('\n').trim();
+};
+
+const serializeError = (error, scriptPath = '') => {
   if (!error) return null;
   if (typeof error === 'string') return { message: error };
   if (error instanceof Error) {
     return {
       name: error.name,
       message: error.message,
-      stack: error.stack,
+      stack: filterStackTrace(error.stack || '', scriptPath),
     };
   }
   return toSerializable(error);
@@ -274,15 +345,15 @@ const readLatestLogs = () => {
   return entries;
 };
 
-const ensureRunExport = (content = '') => {
-  const runExportRegex = /export\s+(async\s+)?function\s+run/;
-  if (runExportRegex.test(content)) {
+const ensureDefaultExport = (content = '') => {
+  const defaultExportRegex = /export\s+default\s+/;
+  if (defaultExportRegex.test(content)) {
     return content;
   }
 
   const trimmed = content.trim();
   if (!trimmed) {
-    return `export async function run(req, res, browser) {
+    return `export default async function handler(req, res, browser) {
   // TODO: add your scraping logic here
   return {};
 }
@@ -294,7 +365,7 @@ const ensureRunExport = (content = '') => {
     .map((line) => `  ${line}`)
     .join('\n');
 
-  return `export async function run(req, res, browser) {
+  return `export default async function handler(req, res, browser) {
 ${indented}
 }
 `;
@@ -531,7 +602,7 @@ app.post('/scripts/save', async (req, res) => {
       targetPath = getResolvedPath(targetFileName).resolvedPath;
     }
 
-    const finalContent = ensureRunExport(incomingContent);
+    const finalContent = ensureDefaultExport(incomingContent);
     await writeFile(targetPath, finalContent, 'utf8');
 
     if (previousPath) {
@@ -586,7 +657,7 @@ app.post('/upload-text', async (req, res) => {
 
   const targetFileName = `${sanitizedName}${SCRIPT_EXTENSION}`;
   const { resolvedPath } = getResolvedPath(targetFileName);
-  const finalContent = ensureRunExport(incomingContent);
+  const finalContent = ensureDefaultExport(incomingContent);
 
   try {
     await writeFile(resolvedPath, finalContent, 'utf8');
@@ -631,9 +702,27 @@ app.use('/api/:scriptName', async (req, res) => {
   const startTime = Date.now();
   const { logs, restore } = captureConsoleLogs();
 
+  let callerStackStage = 0;
   try {
-    const script = await import(scriptPath + `?cacheBust=${Math.random()}`);
-    const result = await script.run(req, res, browser);
+    const scriptUrl = pathToFileURL(scriptPath);
+    scriptUrl.searchParams.set('cacheBust', Date.now().toString());
+    callerStackStage = 1;
+    const scriptModule = await import(scriptUrl.href);
+    callerStackStage = 2;
+    const handler =
+      typeof scriptModule?.default === 'function'
+        ? scriptModule.default
+        : typeof scriptModule?.run === 'function'
+        ? scriptModule.run
+        : null;
+
+    if (!handler) {
+      throw new Error(
+        'Script must export a default async function (or legacy run function).'
+      );
+    }
+
+    const result = await handler(req, res, browser);
     const durationMs = Date.now() - startTime;
 
     await writeEndpointLog(safeScriptName, {
@@ -643,21 +732,52 @@ app.use('/api/:scriptName', async (req, res) => {
       logs,
     });
 
-    console.log(`result: ${JSON.stringify(result)}`);
+    // console.log(`result: ${JSON.stringify(result)}`);
     res.json(result);
   } catch (error) {
-    console.error(error);
     const durationMs = Date.now() - startTime;
+
+    if (callerStackStage === 0) {
+      console.error(`Failed to read script from file system: ${error.message}`);
+    } else if (callerStackStage === 1) {
+      console.error(`Failed to parse script for import: ${error.message}`);
+
+      const syntaxErr = checkSyntax(scriptPath);
+      if (syntaxErr) {
+        // This will print the "pretty" V8 error with the ^ pointer
+        console.error(syntaxErr.stack);
+        error = syntaxErr;
+      } else {
+        console.error(
+          "The error occurred during import but isn't a simple syntax error (Check for missing files or network issues)."
+        );
+      }
+    } else if (callerStackStage === 2) {
+      console.error(serializeError(error, scriptPath).stack);
+    }
 
     await writeEndpointLog(safeScriptName, {
       success: false,
       durationMs,
-      error: serializeError(error),
+      error: serializeError(error, scriptPath),
       logs,
     });
 
     res.status(500).json({ error: 'Error executing script' });
   } finally {
+    // Before restore, also ensure that all browser pages are closed
+    const pages = await browser.pages();
+    await Promise.all(
+      pages.map(async (page) => {
+        try {
+          if (!page.isClosed()) {
+            await page.close();
+          }
+        } catch {
+          // nothing
+        }
+      })
+    );
     restore();
   }
 });

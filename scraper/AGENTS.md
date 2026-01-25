@@ -7,7 +7,7 @@ This repository powers a Home Assistant add-on for running Puppeteer-based scrip
 ## Project Purpose
 - Provide a UI and API for uploading, editing, and executing custom Puppeteer scripts inside Home Assistant.
 - Scripts live under `/config/scripts` (maps to `/addon_configs/<repo>_scraper/scripts` in HA).
-- `/api/<script>` dynamically loads `<script>.mjs`, calls `export async function run(req,res,browser)` and returns JSON.
+- `/api/<script>` dynamically loads `<script>.mjs`, calls its default export (an async function receiving `req, res, browser`) and returns JSON.
 - UI runs inside Home Assistant’s ingress (so routing accommodates `X-Ingress-Path`).
 
 ---
@@ -55,7 +55,7 @@ This repository powers a Home Assistant add-on for running Puppeteer-based scrip
 - CodeMirror text area for quick edits.
 - Buttons: “Insert template”, “New script”, “Save script”.
 - Name field read-only when editing an existing script; can start a new file via “New script”.
-- Uses `/scripts/save` JSON endpoint (auto-wraps missing `export async function run` for `.mjs` files).
+- Uses `/scripts/save` JSON endpoint (auto-wraps missing `export default async function handler` for `.mjs` files).
 
 ---
 
@@ -65,15 +65,15 @@ This repository powers a Home Assistant add-on for running Puppeteer-based scrip
 | `/` | GET | Renders UI (`home.ejs` + static CSS/JS). |
 | `/scripts/list` | GET | Returns `{ scripts: [...] }`. |
 | `/scripts/content/:file` | GET | Returns `{ fileName, content }`. |
-| `/scripts/save` | POST | Body: `{ fileName?, scriptName, scriptContent }`. Always writes `.mjs` files (wraps `run`). |
+| `/scripts/save` | POST | Body: `{ fileName?, scriptName, scriptContent }`. Always writes `.mjs` files (wraps a default export). |
 | `/scripts/rename` | POST | Body: `{ originalFileName, newName }`. Renames file, enforcing a `.mjs` extension. |
 | `/scripts/:fileName` | DELETE | Removes script. |
 | `/upload-file` | POST (multipart) | Upload script file. |
 | `/upload-text` | POST (form) | Legacy form handler for text-based script creation. |
-| `/api/:script` | GET | Executes `<script>.mjs` `run()` and returns JSON. (Puppeteer browser is launched at startup.) |
+| `/api/:script` | GET | Executes `<script>.mjs` default export and returns JSON. (Puppeteer browser is launched at startup.) |
 
 **Notes**:
-- `ensureRunExport` ensures `.mjs` files contain `export async function run`.
+- `ensureDefaultExport` ensures `.mjs` files contain `export default async function handler`.
 - Paths sanitized via `sanitizeScriptName` and `getResolvedPath`.
 - On add-on start, `scripts/` folder from repo is copied to `SCRIPTS_DIR` if empty.
 
@@ -96,7 +96,7 @@ This repository powers a Home Assistant add-on for running Puppeteer-based scrip
 ## Puppeteer Execution
 - Browser launched once with headless + safe flags (`--no-sandbox`, etc.).
 - Scripts import dynamic modules via `import(scriptPath + '?cacheBust=...')` to bypass cache.
-- Scripts expected to export `run(req,res,browser)`.
+- Scripts expected to export `default async function handler(req,res,browser)`.
 
 ---
 
@@ -121,7 +121,7 @@ This repository powers a Home Assistant add-on for running Puppeteer-based scrip
 | --- | --- |
 | Update styling | `public/css/style.css` |
 | Modify UI | `views/home.ejs` + `public/js/app.js` |
-| Adjust script validation | `index.mjs` (functions `ensureRunExport`, `getResolvedPath`, etc.) |
+| Adjust script validation | `index.mjs` (functions `ensureDefaultExport`, `getResolvedPath`, etc.) |
 | Add HA option | `config.yaml`, `translations/en.yaml`, `run.sh`, `README.md` |
 | Extend API (server) | `index.mjs` |
 | Modify Docker behavior | `Dockerfile` |

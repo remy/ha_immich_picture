@@ -31,9 +31,6 @@
             <label for="endpointScriptFile">Upload script file (.mjs, .js, etc.)</label>
             <input type="file" id="endpointScriptFile" name="scriptFile" required />
 
-            <label for="endpointScriptName">Override name (optional)</label>
-            <input type="text" id="endpointScriptName" name="scriptName" placeholder="my-script" />
-
             <button type="submit">Upload File</button>
           </form>
           <ul class="script-list" id="endpointList" data-api-base="<%= apiBasePath %>">

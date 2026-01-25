@@ -4,6 +4,7 @@
   const scriptForm = document.getElementById('textScriptForm');
   const scriptNameInput = document.getElementById('textScriptName');
   const scriptTextArea = document.getElementById('scriptContent');
+  const saveScriptBtn = document.getElementById('saveScriptBtn');
   const statusMessage = document.getElementById('statusMessage');
   const templateBtn = document.getElementById('templateBtn');
   const newScriptBtn = document.getElementById('newScriptBtn');
@@ -26,6 +27,76 @@
   const apiBasePath =
     (endpointList?.dataset.apiBase || '/api/').replace(/\/+$/, '/') || '/api/';
 
+  const ERROR_VIEWS_STORAGE_KEY = 'scraperKnownErrorViews';
+
+  const loadViewedErrors = () => {
+    if (!window.localStorage) return {};
+    try {
+      const raw = window.localStorage.getItem(ERROR_VIEWS_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const persistViewedErrors = (state = {}) => {
+    if (!window.localStorage) return;
+    try {
+      window.localStorage.setItem(
+        ERROR_VIEWS_STORAGE_KEY,
+        JSON.stringify(state)
+      );
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const viewedErrors = loadViewedErrors();
+
+  const hasUnseenError = (scriptBaseName = '', timestamp = '') => {
+    if (!scriptBaseName || !timestamp) {
+      return false;
+    }
+    return viewedErrors[scriptBaseName] !== timestamp;
+  };
+
+  const markErrorViewed = (
+    scriptBaseName = '',
+    timestamp = '',
+    buttonEl = null
+  ) => {
+    if (!scriptBaseName || !timestamp) {
+      return;
+    }
+    if (viewedErrors[scriptBaseName] === timestamp) {
+      return;
+    }
+    viewedErrors[scriptBaseName] = timestamp;
+    persistViewedErrors(viewedErrors);
+    buttonEl?.classList.remove('has-known-error');
+  };
+
+  const requestScriptSave = () => {
+    if (
+      !scriptForm ||
+      editorView?.classList.contains('hidden') ||
+      saveScriptBtn?.disabled
+    ) {
+      return;
+    }
+    if (typeof scriptForm.requestSubmit === 'function') {
+      scriptForm.requestSubmit();
+    } else {
+      const submitEvent = new Event('submit', {
+        bubbles: true,
+        cancelable: true,
+      });
+      scriptForm.dispatchEvent(submitEvent);
+    }
+  };
+
   const createEditor = () => {
     if (!window.CodeMirror || !scriptTextArea) {
       return null;
@@ -46,6 +117,10 @@
         'theme',
         event.matches ? 'material-darker' : 'default'
       );
+    });
+    editorInstance.addKeyMap({
+      'Cmd-S': () => requestScriptSave(),
+      'Ctrl-S': () => requestScriptSave(),
     });
     return editorInstance;
   };
@@ -110,6 +185,12 @@
         const timeLabel = formatTimestamp(log?.timestamp);
         const durationLabel = log?.durationMs ? `${log.durationMs} ms` : '';
         const logBody = escapeHTML(buildLogBody(log));
+        const lastErrorTimestamp = log?.lastError?.timestamp || '';
+        const baseNameSafe = escapeHTML(baseName);
+        const hasKnownError = hasUnseenError(baseName, lastErrorTimestamp);
+        const logButtonClasses = `icon-button log-toggle-button${
+          hasKnownError ? ' has-known-error' : ''
+        }`;
 
         return `<li class="endpoint-row">
           <div class="endpoint-header">
@@ -117,7 +198,9 @@
             <div class="row-actions">
               <button type="button" class="edit-button" data-action="edit" data-file="${safeItem}"><img width="16" src="img/edit.svg"> Edit</button>
               <button type="button" title="Rename endpoint" class="icon-button rename-button" data-action="rename" data-file="${safeItem}"><img width="16" src="img/rename.svg"></button>
-              <button type="button" title="Toggle log" class="icon-button log-toggle-button" data-action="toggle-log" data-file="${safeItem}"><img width="16" src="img/log.svg"></button>
+              <button type="button" title="Toggle log" class="${logButtonClasses}" data-action="toggle-log" data-file="${safeItem}" data-script-base="${baseNameSafe}" data-last-error-ts="${escapeHTML(
+          lastErrorTimestamp
+        )}"><img width="16" src="img/log.svg"></button>
               <button type="button" class="icon-button delete-button" title="Delete script" data-action="delete" data-file="${safeItem}"><img width="16" src="img/delete.svg"></button>
             </div>
           </div>
@@ -151,8 +234,8 @@
   let pendingRename = '';
   let latestLogs = {};
 
-  const ensureRunExport = (content = '') => {
-    const pattern = /export\s+(async\s+)?function\s+run/;
+  const ensureDefaultExport = (content = '') => {
+    const pattern = /export\s+default\s+/;
     if (pattern.test(content)) {
       return content;
     }
@@ -167,7 +250,7 @@
       .map((line) => '  ' + line)
       .join('\n');
 
-    return `export async function run(req, res, browser) {
+    return `export default async function handler(req, res, browser) {
 ${indented}
 }`;
   };
@@ -224,7 +307,7 @@ ${indented}
     }
 
     if (log.result !== undefined) {
-      lines.push(`Result: ${stringifyValue(log.result)}`);
+      lines.push(stringifyValue(log.result));
     }
 
     if (log.logs?.length) {
@@ -439,6 +522,12 @@ ${indented}
         ?.querySelector('.endpoint-log');
       if (logElement) {
         logElement.classList.toggle('hidden');
+        const isVisible = !logElement.classList.contains('hidden');
+        if (isVisible) {
+          const scriptBase = button.dataset.scriptBase;
+          const lastErrorTimestamp = button.dataset.lastErrorTs;
+          markErrorViewed(scriptBase, lastErrorTimestamp, button);
+        }
       }
     } else if (action === 'delete') {
       openDeleteModal(fileName);
@@ -447,11 +536,17 @@ ${indented}
 
   templateBtn?.addEventListener('click', populateFromTemplate);
   newScriptBtn?.addEventListener('click', resetForm);
+  window.addEventListener('keydown', (event) => {
+    if (!(event.metaKey || event.ctrlKey)) return;
+    if ((event.key || '').toLowerCase() !== 's') return;
+    event.preventDefault();
+    requestScriptSave();
+  });
 
   scriptForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const scriptName = scriptNameInput?.value.trim();
-    const content = ensureRunExport(getEditorValue());
+    const content = ensureDefaultExport(getEditorValue());
 
     if (!scriptName) {
       setStatus('Script name is required.', 'error');

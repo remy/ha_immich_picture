@@ -38,7 +38,7 @@ The Express app watches `SCRIPTS_DIR` (defaults to `/config/scripts` inside Home
 
 ## Scripts
 
-There's an "Insert Template" feature, but the script is called with three arguments and the returned object is returned to the request:
+There's an "Insert Template" feature. Each `.mjs` file should `export default async function handler(req, res, browser)`, though legacy scripts with `export async function run` are still supported. The handler is invoked with three arguments and whatever you return will be serialized as the API response:
 
 - request - the full (node) request object
 - response - an Express based response API - possibly only use for headers

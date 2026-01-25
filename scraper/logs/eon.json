@@ -1,18 +1,38 @@
 {
   "endpoint": "eon",
-  "timestamp": "2026-01-25T12:15:32.874Z",
-  "success": false,
-  "durationMs": 45,
-  "error": {
-    "name": "TypeError",
-    "message": "script.run is not a function",
-    "stack": "TypeError: script.run is not a function\n    at file:///Users/remy/dev/scraper/scraper/index.mjs:587:33\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)"
-  },
-  "logs": [
-    {
-      "level": "error",
-      "message": "TypeError: script.run is not a function\n    at file:///Users/remy/dev/scraper/scraper/index.mjs:587:33\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
-      "timestamp": "2026-01-25T12:15:32.874Z"
+  "timestamp": "2026-01-25T23:29:34.089Z",
+  "success": true,
+  "durationMs": 872,
+  "result": {
+    "electricity": {
+      "unitRate": 24.77895,
+      "standingCharge": 47.5944
+    },
+    "gas": {
+      "unitRate": 5.6637,
+      "standingCharge": 33.6021
     }
-  ]
+  },
+  "logs": [],
+  "lastError": {
+    "timestamp": "2026-01-25T23:25:20.419Z",
+    "error": {
+      "name": "Error",
+      "message": "/Users/remy/dev/scraper/scraper/scripts/eon.mjs:2\n  import 'renvy';\n         ^^^^^^^\n\nSyntaxError: Unexpected string\n    at checkSyntax (node:internal/main/check_syntax:72:5)\n\nNode.js v24.11.0",
+      "stack": "/Users/remy/dev/scraper/scraper/scripts/eon.mjs:2\n  import 'renvy';\n         ^^^^^^^\nSyntaxError: Unexpected string\nNode.js v24.11.0"
+    },
+    "durationMs": 3,
+    "logs": [
+      {
+        "level": "error",
+        "message": "Failed to parse script for import: Unexpected string",
+        "timestamp": "2026-01-25T23:25:20.358Z"
+      },
+      {
+        "level": "error",
+        "message": "/Users/remy/dev/scraper/scraper/scripts/eon.mjs:2\n  import 'renvy';\n         ^^^^^^^\n\nSyntaxError: Unexpected string\n    at checkSyntax (node:internal/main/check_syntax:72:5)\n\nNode.js v24.11.0",
+        "timestamp": "2026-01-25T23:25:20.418Z"
+      }
+    ]
+  }
 }

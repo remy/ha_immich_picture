@@ -12,11 +12,15 @@ img {
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   margin: 0;
-  padding: 2rem;
   line-height: 1.5;
   background: color-mix(in srgb, Canvas, transparent 0%);
   color: CanvasText;
+  padding: 1rem;
+  @media (min-width: 600px) {
+    padding: 2rem;
+  }
 }
+
 h1 {
   margin-bottom: 1rem;
 }
@@ -32,11 +36,13 @@ h2 {
   margin-bottom: 1.5rem;
 }
 .panel {
-  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  background: color-mix(in srgb, Canvas, CanvasText 3%);
-  box-shadow: 0 10px 25px color-mix(in srgb, CanvasText 8%, transparent);
+  @media (min-width: 600px) {
+    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    background: color-mix(in srgb, Canvas, CanvasText 3%);
+    box-shadow: 0 10px 25px color-mix(in srgb, CanvasText 8%, transparent);
+  }
 }
 label {
   display: block;
@@ -46,6 +52,7 @@ label {
 input[type='text'],
 textarea,
 select {
+  font-size: inherit;
   width: 100%;
   padding: 0.5rem;
   margin-top: 0.35rem;
@@ -121,8 +128,9 @@ ul.script-list li {
   gap: 0.5rem;
 }
 .upload-inline {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  /* grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); */
+  flex-wrap: wrap;
   gap: 0.5rem 1rem;
   margin-bottom: 1rem;
   align-items: end;
@@ -175,6 +183,12 @@ ul.script-list li {
   background: color-mix(in srgb, CanvasText 15%, transparent);
   color: inherit;
   padding: 0.5rem 0.75rem;
+}
+
+.log-toggle-button.has-known-error {
+  border-color: color-mix(in srgb, #ef4444 70%, transparent);
+  outline: 2px solid color-mix(in srgb, #ef4444 55%, transparent);
+  outline-offset: 1px;
 }
 .edit-button {
   img {
@@ -335,4 +349,8 @@ ul.script-list li {
   font-size: 0.9rem;
   background: transparent;
   color: inherit;
+}
+
+#endpointScriptFile {
+  font-size: inherit;
 }
