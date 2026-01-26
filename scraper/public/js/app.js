@@ -5,6 +5,7 @@
   const scriptNameInput = document.getElementById('textScriptName');
   const scriptTextArea = document.getElementById('scriptContent');
   const saveScriptBtn = document.getElementById('saveScriptBtn');
+  const runScriptBtn = document.getElementById('runScriptBtn');
   const statusMessage = document.getElementById('statusMessage');
   const templateBtn = document.getElementById('templateBtn');
   const newScriptBtn = document.getElementById('newScriptBtn');
@@ -272,7 +273,7 @@
         )}">${escapeHTML(lastRunText)}</span></span>
             <div class="row-actions">
               <button type="button" class="edit-button" data-action="edit" data-file="${safeItem}"><img width="16" src="img/edit.svg"> Edit</button>
-              <a title="Call API" href="${safeApiHref}" target="_blank" rel="noopener" class="button icon-button view-button" data-file="${safeItem}"><img width="16" src="img/view.svg"></a>
+              <a title="Call API" href="${safeApiHref}" target="_blank" rel="noopener" class="button icon-button view-button" data-action="view" data-file="${safeItem}"><img width="16" src="img/view.svg"></a>
               <button type="button" title="Rename endpoint" class="icon-button rename-button" data-action="rename" data-file="${safeItem}"><img width="16" src="img/rename.svg"></button>
               <button type="button" title="Toggle log" class="${logButtonClasses}" data-action="toggle-log" data-file="${safeItem}" data-script-base="${baseNameSafe}" data-last-error-ts="${escapeHTML(
           lastErrorTimestamp
@@ -308,6 +309,14 @@
   let currentFileName = '';
   let pendingRename = '';
   let latestLogs = {};
+  const updateRunButtonState = () => {
+    if (!runScriptBtn) return;
+    const canRun = Boolean(currentFileName);
+    runScriptBtn.disabled = !canRun;
+    runScriptBtn.title = canRun
+      ? 'Run endpoint'
+      : 'Save the script to enable running';
+  };
   const migrateLogEntryKey = (oldBase = '', newBase = '') => {
     if (!oldBase || !newBase || oldBase === newBase) {
       return;
@@ -430,6 +439,149 @@ ${indented}
     }
 
     return lines.join('\n');
+  };
+
+  const updateEndpointRowFromLog = (row, baseName, log) => {
+    if (!row) return;
+    const statusClass = log ? (log.success ? 'success' : 'error') : 'empty';
+    const statusLabel = log
+      ? log.success
+        ? 'Success'
+        : 'Error'
+      : 'No recent run';
+    const timeLabel = formatTimestamp(log?.timestamp);
+    const relativeLastRun = formatRelativeTime(log?.timestamp);
+    const durationLabel = log?.durationMs ? `${log.durationMs} ms` : '';
+    const lastRunText = relativeLastRun || 'Never';
+    const lastRunTitle = timeLabel || relativeLastRun || 'No runs yet';
+    const logBodyText = buildLogBody(log);
+
+    const lastRunElement = row.querySelector('.last-run-time');
+    if (lastRunElement) {
+      lastRunElement.textContent = lastRunText;
+      lastRunElement.title = lastRunTitle;
+    }
+
+    const logElement = row.querySelector('.endpoint-log');
+    if (logElement) {
+      logElement.classList.remove('success', 'error', 'empty');
+      logElement.classList.add(statusClass);
+      const meta = logElement.querySelector('.endpoint-log-meta');
+      if (meta) {
+        const pill = meta.querySelector('.pill');
+        if (pill) {
+          pill.textContent = statusLabel;
+          pill.className = `pill ${statusClass}`;
+        }
+
+        let timestampEl = meta.querySelector('.timestamp');
+        if (timeLabel) {
+          if (!timestampEl) {
+            timestampEl = document.createElement('span');
+            timestampEl.className = 'timestamp';
+            meta.appendChild(timestampEl);
+          }
+          timestampEl.textContent = timeLabel;
+          timestampEl.title = 'Last run';
+        } else if (timestampEl) {
+          timestampEl.remove();
+        }
+
+        let durationEl = meta.querySelector('.duration');
+        if (durationLabel) {
+          if (!durationEl) {
+            durationEl = document.createElement('span');
+            durationEl.className = 'duration';
+            meta.appendChild(durationEl);
+          }
+          durationEl.textContent = durationLabel;
+        } else if (durationEl) {
+          durationEl.remove();
+        }
+      }
+
+      const logBody = logElement.querySelector('.endpoint-log-body');
+      if (logBody) {
+        logBody.textContent = logBodyText;
+      }
+    }
+
+    const logButton = row.querySelector('.log-toggle-button');
+    if (logButton) {
+      const lastErrorTimestamp = log?.lastError?.timestamp || '';
+      logButton.dataset.lastErrorTs = lastErrorTimestamp;
+      if (hasUnseenError(baseName, lastErrorTimestamp)) {
+        logButton.classList.add('has-known-error');
+      } else {
+        logButton.classList.remove('has-known-error');
+      }
+    }
+  };
+
+  const showEndpointSpinner = (logElement) => {
+    if (!logElement) return null;
+    let spinner = logElement.querySelector('.endpoint-log-spinner');
+    if (!spinner) {
+      spinner = document.createElement('div');
+      spinner.className = 'endpoint-log-spinner';
+      spinner.innerHTML =
+        '<span class="spinner" aria-hidden="true"></span><span class="spinner-text">Running...</span>';
+      const logBody = logElement.querySelector('.endpoint-log-body');
+      if (logBody?.parentNode) {
+        logBody.parentNode.insertBefore(spinner, logBody);
+      } else {
+        logElement.appendChild(spinner);
+      }
+    }
+    logElement.setAttribute('aria-busy', 'true');
+    return spinner;
+  };
+
+  const hideEndpointSpinner = (logElement, spinner) => {
+    if (spinner) {
+      spinner.remove();
+    } else {
+      logElement?.querySelector('.endpoint-log-spinner')?.remove();
+    }
+    logElement?.removeAttribute('aria-busy');
+  };
+
+  const refreshEndpointLog = async (baseName, row) => {
+    if (!baseName) return;
+    try {
+      const response = await fetch(
+        'scripts/logs/' + encodeURIComponent(baseName)
+      );
+      let log = null;
+      if (response.ok) {
+        const payload = await response.json();
+        log = payload?.log || null;
+      } else if (response.status !== 404) {
+        return;
+      }
+      latestLogs[baseName] = log;
+      updateEndpointRowFromLog(row, baseName, log);
+      if (getBaseName(currentFileName) === baseName) {
+        updateEditorLogInfo();
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const runEndpoint = async (fileName, row, logElement) => {
+    if (!fileName) return;
+    const apiHref = makeApiLink(fileName);
+    const baseName = getBaseName(fileName);
+    const spinner = showEndpointSpinner(logElement);
+    try {
+      await fetch(apiHref, { method: 'GET' });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      await refreshEndpointLog(baseName, row);
+      hideEndpointSpinner(logElement, spinner);
+    }
   };
 
   const showEditorLogPlaceholder = () => {
@@ -565,6 +717,7 @@ ${indented}
     currentFileName = '';
     setStatus('Ready for a new script');
     showEditorLogPlaceholder();
+    updateRunButtonState();
   };
 
   const populateFromTemplate = () => {
@@ -609,6 +762,7 @@ ${indented}
       currentFileName = fileName;
       setStatus(`Loaded ${fileName}`, 'success');
       updateEditorLogInfo();
+      updateRunButtonState();
     } catch (error) {
       console.error(error);
       setStatus(error.message || 'Failed to load script', 'error');
@@ -748,32 +902,49 @@ ${indented}
   });
 
   endpointList?.addEventListener('click', async (event) => {
-    const button = event.target.closest('button');
-    if (!button) return;
-    const fileName = button.dataset.file;
-    const action = button.dataset.action;
+    const actionElement = event.target.closest('button, a');
+    if (!actionElement) return;
+    const fileName = actionElement.dataset.file;
+    const action = actionElement.dataset.action;
     if (!fileName || !action) return;
 
     if (action === 'edit') {
-      if (button.dataset.file) {
+      if (actionElement.dataset.file) {
         setMode('editor');
         loadScript(fileName);
       }
     } else if (action === 'rename') {
       openRenameModal(fileName);
     } else if (action === 'toggle-log') {
-      const logElement = button
+      const logElement = actionElement
         .closest('.endpoint-row')
         ?.querySelector('.endpoint-log');
       if (logElement) {
         logElement.classList.toggle('hidden');
         const isVisible = !logElement.classList.contains('hidden');
         if (isVisible) {
-          const scriptBase = button.dataset.scriptBase;
-          const lastErrorTimestamp = button.dataset.lastErrorTs;
-          markErrorViewed(scriptBase, lastErrorTimestamp, button);
+          const scriptBase = actionElement.dataset.scriptBase;
+          const lastErrorTimestamp = actionElement.dataset.lastErrorTs;
+          markErrorViewed(scriptBase, lastErrorTimestamp, actionElement);
         }
       }
+    } else if (action === 'view') {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        event.button !== 0
+      ) {
+        return;
+      }
+      event.preventDefault();
+      const row = actionElement.closest('.endpoint-row');
+      const logElement = row?.querySelector('.endpoint-log');
+      if (logElement) {
+        logElement.classList.remove('hidden');
+      }
+      await runEndpoint(fileName, row, logElement);
     } else if (action === 'delete') {
       openDeleteModal(fileName);
     }
@@ -781,6 +952,17 @@ ${indented}
 
   templateBtn?.addEventListener('click', populateFromTemplate);
   newScriptBtn?.addEventListener('click', resetForm);
+  runScriptBtn?.addEventListener('click', async () => {
+    if (!currentFileName) {
+      setStatus('Save the script before running it.', 'error');
+      return;
+    }
+    updateEditorLogInfo();
+    editorLogPlaceholder?.classList.add('hidden');
+    editorLogDetails?.classList.remove('hidden');
+    editorLogInfo?.classList.remove('dimmed');
+    await runEndpoint(currentFileName, null, editorLogDetails || editorLogInfo);
+  });
   window.addEventListener('keydown', (event) => {
     if (!(event.metaKey || event.ctrlKey)) return;
     if ((event.key || '').toLowerCase() !== 's') return;
@@ -831,6 +1013,7 @@ ${indented}
         scriptNameInput.value = getBaseName(result.fileName);
       }
       updateEditorLogInfo();
+      updateRunButtonState();
       setStatus(result.message || 'Saved', 'success');
       await refreshScripts();
     } catch (error) {
@@ -852,4 +1035,5 @@ ${indented}
       .replace(/'/g, '&#039;');
 
   refreshScripts();
+  updateRunButtonState();
 })();

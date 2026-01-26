@@ -26,12 +26,25 @@ if [[ -f "${OPTIONS_FILE}" ]]; then
   mapfile -t NPM_MODULES < <(jq -r '.npm_modules // [] | .[]' "${OPTIONS_FILE}" 2>/dev/null || true)
   if [[ ${#NPM_MODULES[@]} -gt 0 ]]; then
     echo "Installing user npm modules: ${NPM_MODULES[*]}"
-    npm install --no-save "${NPM_MODULES[@]}"
+    npm install --no-save --include=optional --only=production "${NPM_MODULES[@]}"
   fi
 fi
 
 export SCRIPTS_DIR="${RESOLVED_DIR}"
 mkdir -p "${SCRIPTS_DIR}"
+
+# Create symlink to node_modules in scripts directory for ESM resolution
+# Remove existing symlink/directory if it exists
+if [[ -L "${SCRIPTS_DIR}/node_modules" ]] || [[ -e "${SCRIPTS_DIR}/node_modules" ]]; then
+  rm -rf "${SCRIPTS_DIR}/node_modules"
+fi
+ln -s "${PWD}/node_modules" "${SCRIPTS_DIR}/node_modules"
+
+# Add main node_modules to NODE_PATH for legacy support
+export NODE_PATH="${PWD}/node_modules:${NODE_PATH:-}"
+
+echo "Node paths: ${NODE_PATH}"
+echo "Created symlink: ${SCRIPTS_DIR}/node_modules -> ${PWD}/node_modules"
 
 if [[ "${NODE_ENV:-}" == "development" ]]; then
   exec node_modules/.bin/nodemon index.mjs

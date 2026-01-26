@@ -24,14 +24,18 @@
         </div>
 
         <section class="panel" id="endpointsView">
-          <h2>Available endpoints</h2>
-          <p class="note">Call, edit, or manage your scripts.</p>
-          <form class="upload-inline" action="upload-file" method="post" enctype="multipart/form-data">
-            <label for="endpointScriptFile">Upload script file (.mjs, .js, etc.)</label>
-            <input type="file" id="endpointScriptFile" name="scriptFile" required />
+          <header>
+            <div>
+              <h2>Available endpoints</h2>
+              <p class="note">Call, edit, or manage your scripts.</p>
+            </div>
 
-            <button type="submit">Upload File</button>
-          </form>
+            <form class="upload-inline" action="upload-file" method="post" enctype="multipart/form-data">
+              <input type="file" id="endpointScriptFile" name="scriptFile" required accept=".mjs,.js" />
+              <label for="endpointScriptFile">Drop new file (or click to select)</label>
+              <button type="submit">Upload Now</button>
+            </form>
+          </header>
           <ul class="script-list" id="endpointList" data-api-base="<%= apiBasePath %>">
             <li>Loading scripts...</li>
           </ul>
@@ -70,6 +74,9 @@
                 <input type="text" id="textScriptName" name="scriptName" placeholder="my-script" required />
               </div>
               <div class="editor-grid-item editor-log-info dimmed" id="editorLogInfo">
+                <div class="editor-actions editor-log-actions">
+                  <button type="button" id="runScriptBtn" disabled>Run script</button>
+                </div>
                 <div id="editorLogPlaceholder" class="editor-log-placeholder">
                   Logs will appear here after you save and run this script.
                 </div>
@@ -83,8 +90,8 @@
               </div>
               <div class="editor-grid-item editor-content-area">
                 <label for="scriptContent">Content</label>
-                <textarea id="scriptContent" name="scriptContent" rows="14" placeholder="// Paste your script or data here"
-                  required></textarea>
+                <textarea id="scriptContent" name="scriptContent" rows="14"
+                  placeholder="// Paste your script or data here" required></textarea>
               </div>
               <div class="editor-grid-item editor-controls">
                 <div class="editor-actions">
