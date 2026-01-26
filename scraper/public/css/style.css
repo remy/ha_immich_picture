@@ -66,6 +66,8 @@ textarea {
   resize: vertical;
   font-family: 'SFMono-Regular', Consolas, Menlo, Monaco, monospace;
 }
+
+.button,
 button {
   padding: 0.5rem 1.25rem;
   font-size: 1rem;
@@ -89,7 +91,11 @@ button {
 }
 button.secondary {
   background: color-mix(in srgb, CanvasText 15%, transparent);
-  color: inherit;
+  color: CanvasText;
+
+  &:hover {
+    background: color-mix(in srgb, CanvasText 25%, transparent);
+  }
 }
 
 .mode-toggle {
@@ -104,7 +110,11 @@ button.secondary {
   background: transparent;
   padding: 0.4rem 1.5rem;
   cursor: pointer;
-  color: inherit;
+  color: CanvasText;
+
+  &:hover {
+    background: color-mix(in srgb, CanvasText 25%, transparent);
+  }
 }
 .mode-button.active {
   background: #2563eb;
@@ -154,6 +164,15 @@ ul.script-list li {
 .script-name {
   font-weight: 600;
   word-break: break-all;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.last-run-time {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, CanvasText 65%, transparent);
 }
 .endpoint-header {
   width: 100%;
@@ -178,6 +197,7 @@ ul.script-list li {
 }
 .delete-button,
 .rename-button,
+.view-button,
 .log-toggle-button {
   border: 1px solid color-mix(in srgb, CanvasText 5%, transparent);
   background: color-mix(in srgb, CanvasText 15%, transparent);
@@ -203,10 +223,6 @@ ul.script-list li {
   align-items: center;
   color: CanvasText;
 
-  img {
-    margin-left: 4px;
-  }
-
   &:hover {
     text-decoration: underline;
   }
@@ -224,6 +240,91 @@ ul.script-list li {
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-top: 20px;
+}
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(260px, 320px);
+  grid-template-areas:
+    'name log'
+    'content log'
+    'controls log'
+    'tip log';
+  gap: 1rem;
+  grid-auto-rows: min-content;
+}
+.editor-grid-item {
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .editor-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'name'
+      'log'
+      'content'
+      'controls'
+      'tip';
+  }
+}
+.script-name-area {
+  grid-area: name;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  label {
+    margin: 0;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  input {
+    width: 100%;
+    margin: 0;
+    background: Canvas;
+  }
+}
+.editor-log-info {
+  grid-area: log;
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  background: color-mix(in srgb, Canvas, CanvasText 4%);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  align-self: flex-start;
+}
+.editor-log-info.dimmed {
+  opacity: 0.55;
+}
+.editor-log-placeholder {
+  font-size: 0.9rem;
+  color: color-mix(in srgb, CanvasText 65%, transparent);
+  margin-bottom: 0.5rem;
+}
+.editor-log-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.editor-log-meta .log-time {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, CanvasText 65%, transparent);
+}
+.editor-content-area {
+  grid-area: content;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.editor-controls {
+  grid-area: controls;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.editor-tip {
+  grid-area: tip;
+}
+.editor-tip .note {
+  margin-top: 0;
 }
 .status {
   margin-top: 0.5rem;

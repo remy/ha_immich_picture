@@ -24,10 +24,32 @@
   const renameInput = document.getElementById('renameInput');
   const confirmRenameBtn = document.getElementById('confirmRenameBtn');
   const cancelRenameBtn = document.getElementById('cancelRenameBtn');
+  const editorLogInfo = document.getElementById('editorLogInfo');
+  const editorLogDetails = document.getElementById('editorLogDetails');
+  const editorLogPlaceholder = document.getElementById('editorLogPlaceholder');
+  const editorLogStatus = document.getElementById('editorLogStatus');
+  const editorLogTime = document.getElementById('editorLogTime');
+  const editorLogBody = document.getElementById('editorLogBody');
   const apiBasePath =
     (endpointList?.dataset.apiBase || '/api/').replace(/\/+$/, '/') || '/api/';
 
+  const confirmButtonBaseClass = (confirmDeleteBtn?.className || '')
+    .split(/\s+/)
+    .filter((cls) => cls && cls !== 'danger')
+    .join(' ');
+  let confirmModalResolve = null;
+
   const ERROR_VIEWS_STORAGE_KEY = 'scraperKnownErrorViews';
+  const normalizeScriptName = (value = '') =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 100);
+  const getBaseName = (value = '') => value.replace(/\.[^.]+$/, '');
+  const relativeTimeFormatter = window.Intl?.RelativeTimeFormat
+    ? new window.Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+    : null;
 
   const loadViewedErrors = () => {
     if (!window.localStorage) return {};
@@ -76,6 +98,54 @@
     viewedErrors[scriptBaseName] = timestamp;
     persistViewedErrors(viewedErrors);
     buttonEl?.classList.remove('has-known-error');
+  };
+
+  const hideConfirmModal = () => {
+    confirmModal?.classList.add('hidden');
+  };
+
+  const resolveConfirmModal = (result) => {
+    if (confirmModalResolve) {
+      const resolver = confirmModalResolve;
+      confirmModalResolve = null;
+      hideConfirmModal();
+      resolver(result);
+    } else if (result === false) {
+      hideConfirmModal();
+    }
+  };
+
+  const openConfirmModal = ({
+    title = 'Confirm',
+    message = '',
+    confirmLabel = 'Confirm',
+    variant = '',
+  } = {}) => {
+    if (
+      !confirmModal ||
+      !confirmTitle ||
+      !confirmMessage ||
+      !confirmDeleteBtn
+    ) {
+      const fallback = window.confirm(message || 'Are you sure?');
+      return Promise.resolve(fallback);
+    }
+    return new Promise((resolve) => {
+      resolveConfirmModal(false);
+      confirmModalResolve = resolve;
+      confirmTitle.textContent = title;
+      confirmMessage.textContent = message;
+      confirmDeleteBtn.textContent = confirmLabel;
+      const classes = [
+        confirmButtonBaseClass,
+        variant === 'danger' ? 'danger' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      confirmDeleteBtn.className = classes;
+      confirmModal.classList.remove('hidden');
+    });
   };
 
   const requestScriptSave = () => {
@@ -183,7 +253,10 @@
             : 'Error'
           : 'No recent run';
         const timeLabel = formatTimestamp(log?.timestamp);
+        const relativeLastRun = formatRelativeTime(log?.timestamp);
         const durationLabel = log?.durationMs ? `${log.durationMs} ms` : '';
+        const lastRunText = relativeLastRun || 'Never';
+        const lastRunTitle = timeLabel || relativeLastRun || 'No runs yet';
         const logBody = escapeHTML(buildLogBody(log));
         const lastErrorTimestamp = log?.lastError?.timestamp || '';
         const baseNameSafe = escapeHTML(baseName);
@@ -194,9 +267,12 @@
 
         return `<li class="endpoint-row">
           <div class="endpoint-header">
-            <span class="script-name"><a class="api-link" title="Call API and view results" href="${safeApiHref}" target="_blank" rel="noopener">${safeItem}<img width="16" src="img/view.svg"></a></span>
+            <span class="script-name"><a class="api-link" title="Call API and view results" href="${safeApiHref}" target="_blank" rel="noopener">${safeItem}</a><span class="last-run-time" title="${escapeHTML(
+          lastRunTitle
+        )}">${escapeHTML(lastRunText)}</span></span>
             <div class="row-actions">
               <button type="button" class="edit-button" data-action="edit" data-file="${safeItem}"><img width="16" src="img/edit.svg"> Edit</button>
+              <a title="Call API" href="${safeApiHref}" target="_blank" rel="noopener" class="button icon-button view-button" data-file="${safeItem}"><img width="16" src="img/view.svg"></a>
               <button type="button" title="Rename endpoint" class="icon-button rename-button" data-action="rename" data-file="${safeItem}"><img width="16" src="img/rename.svg"></button>
               <button type="button" title="Toggle log" class="${logButtonClasses}" data-action="toggle-log" data-file="${safeItem}" data-script-base="${baseNameSafe}" data-last-error-ts="${escapeHTML(
           lastErrorTimestamp
@@ -230,9 +306,17 @@
   };
 
   let currentFileName = '';
-  let pendingDelete = null;
   let pendingRename = '';
   let latestLogs = {};
+  const migrateLogEntryKey = (oldBase = '', newBase = '') => {
+    if (!oldBase || !newBase || oldBase === newBase) {
+      return;
+    }
+    if (latestLogs[oldBase]) {
+      latestLogs[newBase] = latestLogs[oldBase];
+      delete latestLogs[oldBase];
+    }
+  };
 
   const ensureDefaultExport = (content = '') => {
     const pattern = /export\s+default\s+/;
@@ -261,21 +345,6 @@ ${indented}
     statusMessage.className = 'status ' + type;
   };
 
-  const resetForm = () => {
-    scriptForm?.reset();
-    setEditorValue('');
-    currentFileName = '';
-    if (scriptNameInput) {
-      scriptNameInput.readOnly = false;
-    }
-    setStatus('Ready for a new script');
-  };
-
-  const populateFromTemplate = () => {
-    setEditorValue(SCRIPT_TEMPLATE);
-    setStatus('Template inserted. Customize and save.');
-  };
-
   const stringifyValue = (value) => {
     try {
       if (typeof value === 'string') return value;
@@ -294,6 +363,41 @@ ${indented}
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleString();
+  };
+
+  const formatRelativeTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const diffSeconds = (date.getTime() - Date.now()) / 1000;
+    const divisions = [
+      { amount: 60, unit: 'second' },
+      { amount: 60, unit: 'minute' },
+      { amount: 24, unit: 'hour' },
+      { amount: 7, unit: 'day' },
+      { amount: 4.34524, unit: 'week' },
+      { amount: 12, unit: 'month' },
+      { amount: Number.POSITIVE_INFINITY, unit: 'year' },
+    ];
+    let duration = diffSeconds;
+    for (const division of divisions) {
+      if (Math.abs(duration) < division.amount) {
+        const rounded = Math.round(duration);
+        if (relativeTimeFormatter) {
+          return relativeTimeFormatter.format(rounded, division.unit);
+        }
+        if (Math.abs(rounded) <= 1 && division.unit === 'second') {
+          return rounded <= 0 ? 'just now' : 'in a few seconds';
+        }
+        const absoluteValue = Math.max(Math.abs(rounded), 1);
+        const unitLabel =
+          absoluteValue === 1 ? division.unit : `${division.unit}s`;
+        const suffix = rounded <= 0 ? 'ago' : 'from now';
+        return `${absoluteValue} ${unitLabel} ${suffix}`;
+      }
+      duration /= division.amount;
+    }
+    return '';
   };
 
   const buildLogBody = (log) => {
@@ -328,6 +432,146 @@ ${indented}
     return lines.join('\n');
   };
 
+  const showEditorLogPlaceholder = () => {
+    if (!editorLogInfo) return;
+    editorLogInfo.classList.add('dimmed');
+    editorLogPlaceholder?.classList.remove('hidden');
+    editorLogDetails?.classList.add('hidden');
+    if (editorLogStatus) {
+      editorLogStatus.textContent = 'No recent run';
+      editorLogStatus.className = 'pill empty';
+    }
+    if (editorLogTime) {
+      editorLogTime.textContent = '';
+      editorLogTime.title = '';
+    }
+    if (editorLogBody) {
+      editorLogBody.textContent = '';
+    }
+  };
+
+  const updateEditorLogInfo = () => {
+    if (!editorLogInfo) return;
+    if (!currentFileName) {
+      showEditorLogPlaceholder();
+      return;
+    }
+    const baseName = currentFileName.replace(/\.[^.]+$/, '');
+    const log = latestLogs[baseName];
+    const statusClass = log ? (log.success ? 'success' : 'error') : 'empty';
+    const statusLabel = log
+      ? log.success
+        ? 'Success'
+        : 'Error'
+      : 'No recent run';
+    const timeLabel = formatTimestamp(log?.timestamp);
+    const relativeLastRun = formatRelativeTime(log?.timestamp);
+    const timeText = relativeLastRun || timeLabel || 'Never';
+    const logBodyText = buildLogBody(log);
+
+    editorLogInfo.classList.remove('dimmed');
+    editorLogPlaceholder?.classList.add('hidden');
+    editorLogDetails?.classList.remove('hidden');
+
+    if (editorLogStatus) {
+      editorLogStatus.textContent = statusLabel;
+      editorLogStatus.className = `pill ${statusClass}`;
+    }
+    if (editorLogTime) {
+      editorLogTime.textContent = timeText;
+      editorLogTime.title = timeLabel || relativeLastRun || 'No runs yet';
+    }
+    if (editorLogBody) {
+      editorLogBody.textContent = logBodyText;
+    }
+  };
+
+  const maybeRenameCurrentScript = async (nextName = '') => {
+    if (!currentFileName) {
+      return true;
+    }
+    const sanitized = normalizeScriptName(nextName);
+    const currentBase = getBaseName(currentFileName);
+    if (!sanitized) {
+      setStatus(
+        'Script name must include letters, numbers, dashes, or underscores.',
+        'error'
+      );
+      if (scriptNameInput) {
+        scriptNameInput.value = currentBase;
+        scriptNameInput.focus();
+      }
+      return false;
+    }
+    if (sanitized === currentBase) {
+      if (scriptNameInput) {
+        scriptNameInput.value = sanitized;
+      }
+      return true;
+    }
+    const confirmed = await openConfirmModal({
+      title: 'Rename script',
+      message: `Rename "${currentBase}" to "${sanitized}"? This will change its endpoint URL and history.`,
+      confirmLabel: 'Rename',
+    });
+    if (!confirmed) {
+      if (scriptNameInput) {
+        scriptNameInput.value = currentBase;
+        scriptNameInput.focus();
+      }
+      return false;
+    }
+    try {
+      const response = await fetch('scripts/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalFileName: currentFileName,
+          newName: sanitized,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setStatus(payload.error || 'Rename failed.', 'error');
+        if (scriptNameInput) {
+          scriptNameInput.value = currentBase;
+          scriptNameInput.focus();
+        }
+        return false;
+      }
+      const newFileName = `${sanitized}.mjs`;
+      migrateLogEntryKey(currentBase, sanitized);
+      currentFileName = newFileName;
+      if (scriptNameInput) {
+        scriptNameInput.value = sanitized;
+      }
+      setStatus(`Renamed to ${newFileName}`, 'success');
+      await refreshScripts();
+      return true;
+    } catch (error) {
+      console.error(error);
+      setStatus('Rename failed.', 'error');
+      if (scriptNameInput) {
+        scriptNameInput.value = currentBase;
+        scriptNameInput.focus();
+      }
+      return false;
+    }
+  };
+
+  const resetForm = () => {
+    scriptForm?.reset();
+    setEditorValue('');
+    currentFileName = '';
+    setStatus('Ready for a new script');
+    showEditorLogPlaceholder();
+  };
+
+  const populateFromTemplate = () => {
+    setEditorValue(SCRIPT_TEMPLATE);
+    setStatus('Template inserted. Customize and save.');
+  };
+
   const refreshScripts = async () => {
     try {
       const response = await fetch('scripts/list?includeLogs=1');
@@ -340,6 +584,7 @@ ${indented}
       }
       latestLogs = data.logs || {};
       renderEndpointList(data.scripts);
+      updateEditorLogInfo();
     } catch (error) {
       console.error(error);
     }
@@ -358,37 +603,39 @@ ${indented}
 
       if (scriptNameInput) {
         scriptNameInput.value = nameWithoutExt;
-        scriptNameInput.readOnly = true;
       }
 
       setEditorValue(payload.content || '');
       currentFileName = fileName;
       setStatus(`Loaded ${fileName}`, 'success');
+      updateEditorLogInfo();
     } catch (error) {
       console.error(error);
       setStatus(error.message || 'Failed to load script', 'error');
     }
   };
 
-  const openDeleteModal = (fileName) => {
-    if (!confirmModal) return;
-    pendingDelete = fileName;
-    confirmTitle.textContent = 'Delete script';
-    confirmMessage.textContent = `Are you sure you want to delete ${fileName}? This cannot be undone.`;
-    confirmModal.classList.remove('hidden');
-  };
-
-  const closeDeleteModal = () => {
-    pendingDelete = null;
-    confirmModal?.classList.add('hidden');
-  };
-
-  cancelDeleteBtn?.addEventListener('click', closeDeleteModal);
+  cancelDeleteBtn?.addEventListener('click', () => resolveConfirmModal(false));
   confirmModal?.addEventListener('click', (event) => {
     if (event.target === confirmModal) {
-      closeDeleteModal();
+      resolveConfirmModal(false);
     }
   });
+  confirmDeleteBtn?.addEventListener('click', () => resolveConfirmModal(true));
+
+  const openDeleteModal = (fileName) => {
+    if (!fileName) return;
+    openConfirmModal({
+      title: 'Delete script',
+      message: `Are you sure you want to delete ${fileName}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    }).then((confirmed) => {
+      if (confirmed) {
+        deleteScript(fileName);
+      }
+    });
+  };
 
   const openRenameModal = (fileName) => {
     if (!renameModal || !renameInput) return;
@@ -472,8 +719,6 @@ ${indented}
     } catch (error) {
       console.error(error);
       window.alert('Delete failed.');
-    } finally {
-      closeDeleteModal();
     }
   };
 
@@ -545,12 +790,24 @@ ${indented}
 
   scriptForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const scriptName = scriptNameInput?.value.trim();
+    let scriptName = scriptNameInput?.value.trim();
     const content = ensureDefaultExport(getEditorValue());
 
     if (!scriptName) {
       setStatus('Script name is required.', 'error');
       return;
+    }
+
+    if (currentFileName) {
+      const renamed = await maybeRenameCurrentScript(scriptName);
+      if (!renamed) {
+        return;
+      }
+      scriptName = scriptNameInput?.value.trim();
+      if (!scriptName) {
+        setStatus('Script name is required.', 'error');
+        return;
+      }
     }
 
     try {
@@ -570,9 +827,10 @@ ${indented}
 
       const result = await response.json();
       currentFileName = result.fileName;
-      if (scriptNameInput) {
-        scriptNameInput.readOnly = true;
+      if (scriptNameInput && result.fileName) {
+        scriptNameInput.value = getBaseName(result.fileName);
       }
+      updateEditorLogInfo();
       setStatus(result.message || 'Saved', 'success');
       await refreshScripts();
     } catch (error) {
