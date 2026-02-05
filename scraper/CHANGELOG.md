@@ -7,6 +7,10 @@
   - `callService(domain, service, serviceData)` - Call Home Assistant services
   - `getConfig()` - Get Home Assistant configuration
 
+## 2.0.2
+
+- **Fix** attempt to resolve `Error: Navigating frame was detached` [disabling `FedCm`](https://github.com/puppeteer/puppeteer/issues/14059)
+
 ## 2.0.1
 
 - **Fix**: Correct auto-inserted function signature to use new context object format (`request`, `response`, `browser`, `cheerio`)
