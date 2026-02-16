@@ -1,6 +1,6 @@
 name: Scraper
 slug: scraper
-version: '2.2.1'
+version: '2.2.2'
 description: Upload, manage, and run custom Puppeteer-based scraping scripts from Home Assistant.
 url: https://github.com/remy/scraper/
 arch:

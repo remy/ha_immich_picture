@@ -284,10 +284,15 @@
     }
     endpointList.innerHTML = items
       .map((item) => {
-        const apiHref = makeApiLink(item);
-        const safeItem = escapeHTML(item);
+        // Handle both old format (string) and new format (object with file, name, schedule)
+        const itemFile = typeof item === 'string' ? item : item.file;
+        const itemName = typeof item === 'string' ? item.replace(/\.[^.]+$/, '') : item.name;
+        const scheduleInfo = typeof item === 'object' ? item.schedule : null;
+
+        const apiHref = makeApiLink(itemFile);
+        const safeItem = escapeHTML(itemFile);
         const safeApiHref = escapeHTML(apiHref);
-        const baseName = item.replace(/\.[^.]+$/, '');
+        const baseName = itemName;
         const log = latestLogs[baseName];
         const statusClass = log ? (log.success ? 'success' : 'error') : 'empty';
         const statusLabel = log
@@ -306,13 +311,18 @@
         const hasKnownError =
           log?.success === false &&
           hasUnseenError(baseName, lastErrorTimestamp);
-        const logButtonClasses = `icon-button log-toggle-button${
-          hasKnownError ? ' has-known-error' : ''
-        }`;
+        const logButtonClasses = `icon-button log-toggle-button${hasKnownError ? ' has-known-error' : ''
+          }`;
+
+        // Format schedule information
+        const isScheduled = scheduleInfo?.scheduled;
+        const nextRunTime = scheduleInfo?.nextRunTime;
+        const scheduleDisplay = isScheduled ? ` <svg class="schedule-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>` : '';
+        const nextRunDisplay = isScheduled && nextRunTime ? ` <span class="next-run-time" title="${escapeHTML(formatTimestamp(nextRunTime))}">${escapeHTML(formatRelativeTime(nextRunTime))}</span>` : '';
 
         return `<li class="endpoint-row">
           <div class="endpoint-header">
-            <span class="script-name"><a href="${safeApiHref}" class="plain edit-link" data-action="edit-link" data-file="${safeItem}">${safeItem}</a><span class="last-run-time" title="${escapeHTML(
+            <span class="script-name"><a href="${safeApiHref}" class="plain edit-link" data-action="edit-link" data-file="${safeItem}">${safeItem}</a>${scheduleDisplay}${nextRunDisplay}<span class="last-run-time" title="${escapeHTML(
           lastRunTitle
         )}">${escapeHTML(lastRunText)}</span></span>
             <div class="row-actions">
@@ -330,18 +340,16 @@
               <span class="pill ${statusClass}">${escapeHTML(
           statusLabel
         )}</span>
-              ${
-                timeLabel
-                  ? `<span class="timestamp" title="Last run">${escapeHTML(
-                      timeLabel
-                    )}</span>`
-                  : ''
-              }
-              ${
-                durationLabel
-                  ? `<span class="duration">${escapeHTML(durationLabel)}</span>`
-                  : ''
-              }
+              ${timeLabel
+            ? `<span class="timestamp" title="Last run">${escapeHTML(
+              timeLabel
+            )}</span>`
+            : ''
+          }
+              ${durationLabel
+            ? `<span class="duration">${escapeHTML(durationLabel)}</span>`
+            : ''
+          }
             </div>
             <pre class="endpoint-log-body">${logBody}</pre>
           </div>

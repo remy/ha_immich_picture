@@ -1,3 +1,7 @@
+## 2.2.2
+
+- Small improvement, show if a script is scheduled and when it's due
+
 ## 2.2.1
 
 - **Fix** - variables being accessed before init 🤦

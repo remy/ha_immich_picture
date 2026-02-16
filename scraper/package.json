@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "cheerio": "^1.2.0",
+    "cron-parser": "^5.5.0",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
     "homeassistant": "^0.2.0",

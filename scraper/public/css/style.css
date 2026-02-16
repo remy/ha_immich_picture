@@ -20,7 +20,11 @@ img {
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   margin: 0;
   line-height: 1.5;
   background: color-mix(in srgb, Canvas, transparent 0%);
@@ -285,6 +289,18 @@ ul.script-list {
   font-weight: 400;
   font-size: 0.85rem;
   color: color-mix(in srgb, CanvasText 65%, transparent);
+}
+
+.schedule-icon {
+  display: inline-block;
+  color: color-mix(in srgb, #3b82f6 85%, transparent);
+  flex-shrink: 0;
+}
+
+.next-run-time {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, #3b82f6 85%, transparent);
 }
 
 .endpoint-header {

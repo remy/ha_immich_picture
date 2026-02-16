@@ -4,6 +4,7 @@ import multer from 'multer';
 import * as cheerio from 'cheerio';
 import yaml from 'js-yaml';
 import cron from 'node-cron';
+import { CronExpressionParser } from 'cron-parser';
 import {
   existsSync,
   mkdirSync,
@@ -32,6 +33,9 @@ const LOGS_DIR = join(__dirname, 'logs');
 
 // Store active cron tasks so we can destroy them when re-initializing
 const activeCronTasks = new Map();
+
+// Store cron expressions for each scheduled script
+const scriptCronExpressions = new Map();
 
 // Debounce timer for scheduler reinitialization
 let schedulerReinitTimer = null;
@@ -486,6 +490,57 @@ function getScripts() {
     .sort();
 }
 
+/**
+ * Get schedule information for a script
+ */
+function getScriptScheduleInfo(scriptName) {
+  const cronExpression = scriptCronExpressions.get(scriptName);
+  if (!cronExpression) {
+    return { scheduled: false };
+  }
+
+  const task = activeCronTasks.get(scriptName);
+  if (!task) {
+    return { scheduled: false, cron: cronExpression };
+  }
+
+  try {
+    // Parse the cron expression to get the next run time
+    const interval = CronExpressionParser.parse(cronExpression);
+    const nextDate = interval.next();
+    const nextRunTime = nextDate ? nextDate.toISOString() : null;
+
+    return {
+      scheduled: true,
+      cron: cronExpression,
+      nextRunTime,
+    };
+  } catch (error) {
+    console.warn(
+      `[SCHEDULER] Failed to get next run time for ${scriptName}:`,
+      error.message
+    );
+    return {
+      scheduled: true,
+      cron: cronExpression,
+    };
+  }
+}
+
+/**
+ * Get all scripts with their schedule information
+ */
+function getScriptsWithScheduleInfo() {
+  return getScripts().map(scriptFile => {
+    const scriptName = trimScriptExtension(scriptFile);
+    return {
+      file: scriptFile,
+      name: scriptName,
+      schedule: getScriptScheduleInfo(scriptName),
+    };
+  });
+}
+
 /*
  * Queue system for script executions to prevent concurrent Puppeteer access
  */
@@ -701,6 +756,7 @@ function destroyAllScheduledTasks() {
     }
   }
   activeCronTasks.clear();
+  scriptCronExpressions.clear();
 }
 
 /**
@@ -761,6 +817,7 @@ async function initializeScheduler(isReload = false) {
           });
 
           activeCronTasks.set(scriptName, task);
+          scriptCronExpressions.set(scriptName, cronExpression);
           scheduledCount++;
           console.log(
             `[SCHEDULER] Scheduled ${scriptName} with cron: ${cronExpression}`
@@ -904,7 +961,7 @@ app.use('/reset', (req, res) => {
 app.get('/scripts/list', (req, res) => {
   const includeLogs =
     req.query.includeLogs === '1' || req.query.includeLogs === 'true';
-  const payload = { scripts: getScripts() };
+  const payload = { scripts: getScriptsWithScheduleInfo() };
 
   if (includeLogs) {
     payload.logs = readLatestLogs();
@@ -983,7 +1040,7 @@ app.post('/scripts/rename', async (req, res) => {
     const { resolvedPath: newPath } = getResolvedPath(targetFileName);
 
     if (newPath === original.resolvedPath) {
-      return res.json({ message: 'Name unchanged.', scripts: getScripts() });
+      return res.json({ message: 'Name unchanged.', scripts: getScriptsWithScheduleInfo() });
     }
 
     if (existsSync(newPath)) {
@@ -995,7 +1052,7 @@ app.post('/scripts/rename', async (req, res) => {
     await rename(original.resolvedPath, newPath);
     res.json({
       message: `Renamed to ${targetFileName}`,
-      scripts: getScripts(),
+      scripts: getScriptsWithScheduleInfo(),
     });
   } catch (error) {
     console.error(error);
@@ -1011,7 +1068,7 @@ app.delete('/scripts/:fileName', async (req, res) => {
       return res.status(404).json({ error: 'Script not found.' });
     }
     await unlink(resolvedPath);
-    res.json({ message: `Deleted ${fileName}`, scripts: getScripts() });
+    res.json({ message: `Deleted ${fileName}`, scripts: getScriptsWithScheduleInfo() });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Unable to delete script.' });
@@ -1055,13 +1112,13 @@ app.post('/scripts/save', async (req, res) => {
     await writeFile(targetPath, finalContent, 'utf8');
 
     if (previousPath) {
-      await unlink(previousPath).catch(() => {});
+      await unlink(previousPath).catch(() => { });
     }
 
     res.json({
       fileName: targetFileName,
       message: `Saved ${targetFileName}`,
-      scripts: getScripts(),
+      scripts: getScriptsWithScheduleInfo(),
     });
   } catch (error) {
     console.error(error);
