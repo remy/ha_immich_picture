@@ -105,11 +105,10 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
     # ------------------------------------------------------------------
 
     async def _fetch_random(self, session) -> list[dict[str, Any]]:
-        count = self.api_params.get("count", self.asset_count)
-        url = f"{self.host}/api/assets/random"
-        async with session.get(
-            url, headers=self._headers, params={"count": count}
-        ) as resp:
+        url = f"{self.host}/api/search/random"
+        body: dict[str, Any] = {"count": self.asset_count}
+        body.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
+        async with session.post(url, headers=self._headers, json=body) as resp:
             resp.raise_for_status()
             data = await resp.json()
         return data if isinstance(data, list) else []

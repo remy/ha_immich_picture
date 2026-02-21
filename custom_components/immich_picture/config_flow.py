@@ -166,10 +166,23 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_random_params(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Configure the number of random assets to fetch each refresh."""
+        """Configure random asset count and optional JSON filters."""
+        import json
+
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            self._collected[CONF_ASSET_COUNT] = int(user_input[CONF_ASSET_COUNT])
-            return await self.async_step_intervals()
+            raw = user_input.get("random_query", "{}").strip() or "{}"
+            try:
+                params = json.loads(raw)
+                if not isinstance(params, dict):
+                    raise ValueError("Must be a JSON object")
+            except (ValueError, TypeError):
+                errors["random_query"] = "invalid_json"
+            else:
+                self._collected[CONF_ASSET_COUNT] = int(user_input[CONF_ASSET_COUNT])
+                self._collected[CONF_API_PARAMS] = params
+                return await self.async_step_intervals()
 
         return self.async_show_form(
             step_id="random_params",
@@ -178,8 +191,16 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(
                         CONF_ASSET_COUNT, default=DEFAULT_ASSET_COUNT
                     ): _number_selector(1, 500),
+                    vol.Optional("random_query", default="{}"): TextSelector(
+                        TextSelectorConfig(multiline=True)
+                    ),
                 }
             ),
+            description_placeholders={
+                "example": '{"personIds": ["uuid1", "uuid2"]}',
+                "docs_url": "https://api.immich.app/endpoints/search/searchRandom",
+            },
+            errors=errors,
         )
 
     # ------------------------------------------------------------------
@@ -325,7 +346,8 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             description_placeholders={
-                "example": '{"city": "Paris", "isFavorite": true, "type": "IMAGE"}'
+                "example": '{"city": "Paris", "isFavorite": true, "type": "IMAGE"}',
+                "docs_url": "https://api.immich.app/endpoints/search/searchAssets",
             },
             errors=errors,
         )

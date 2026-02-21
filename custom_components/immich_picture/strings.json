@@ -22,9 +22,10 @@
       },
       "random_params": {
         "title": "Random Assets – Options",
-        "description": "Configure how many random photos to load each refresh cycle.",
+        "description": "Configure how many random photos to load each refresh cycle. Optionally provide a JSON body to filter results (e.g. by person). Example: {example}\n\n[API documentation]({docs_url})",
         "data": {
-          "asset_count": "Number of assets"
+          "asset_count": "Number of assets",
+          "random_query": "Filter (JSON, optional)"
         }
       },
       "all_params": {
@@ -52,7 +53,7 @@
       },
       "search_params": {
         "title": "Search Metadata – Options",
-        "description": "Provide a JSON object of Immich search metadata fields. Example: {example}",
+        "description": "Provide a JSON object of Immich search metadata fields. Example: {example}\n\n[API documentation]({docs_url})",
         "data": {
           "asset_count": "Number of results",
           "search_query": "Search query (JSON)"
