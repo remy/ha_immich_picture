@@ -447,29 +447,65 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Show the options form."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+        import json
 
-        current = self._config_entry.options or self._config_entry.data
+        errors: dict[str, str] = {}
+        endpoint = self._config_entry.data.get(CONF_API_ENDPOINT, "")
+        has_json = endpoint in (ENDPOINT_RANDOM, ENDPOINT_SEARCH)
+        docs_url = (
+            "https://api.immich.app/endpoints/search/searchRandom"
+            if endpoint == ENDPOINT_RANDOM
+            else "https://api.immich.app/endpoints/search/searchAssets"
+        )
+
+        if user_input is not None:
+            options: dict[str, Any] = {
+                CONF_ROTATION_INTERVAL: int(user_input[CONF_ROTATION_INTERVAL]),
+                CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                CONF_ASSET_COUNT: int(user_input[CONF_ASSET_COUNT]),
+            }
+            if has_json:
+                raw = user_input.get(CONF_API_PARAMS, "{}").strip() or "{}"
+                try:
+                    params = json.loads(raw)
+                    if not isinstance(params, dict):
+                        raise ValueError("Must be a JSON object")
+                except (ValueError, TypeError):
+                    errors[CONF_API_PARAMS] = "invalid_json"
+                else:
+                    options[CONF_API_PARAMS] = params
+
+            if not errors:
+                return self.async_create_entry(title="", data=options)
+
+        # Merge data → options so options always take priority
+        current = {**self._config_entry.data, **self._config_entry.options}
+
+        schema_dict: dict[Any, Any] = {
+            vol.Required(
+                CONF_ROTATION_INTERVAL,
+                default=current.get(CONF_ROTATION_INTERVAL, DEFAULT_ROTATION_INTERVAL),
+            ): _number_selector(5, 3600),
+            vol.Required(
+                CONF_SCAN_INTERVAL,
+                default=current.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            ): _number_selector(60, 86400),
+            vol.Required(
+                CONF_ASSET_COUNT,
+                default=current.get(CONF_ASSET_COUNT, DEFAULT_ASSET_COUNT),
+            ): _number_selector(1, 500),
+        }
+
+        if has_json:
+            existing = current.get(CONF_API_PARAMS, {})
+            existing_str = json.dumps(existing, indent=2) if existing else "{}"
+            schema_dict[vol.Optional(CONF_API_PARAMS, default=existing_str)] = (
+                TextSelector(TextSelectorConfig(multiline=True))
+            )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_ROTATION_INTERVAL,
-                        default=current.get(
-                            CONF_ROTATION_INTERVAL, DEFAULT_ROTATION_INTERVAL
-                        ),
-                    ): _number_selector(5, 3600),
-                    vol.Required(
-                        CONF_SCAN_INTERVAL,
-                        default=current.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-                    ): _number_selector(60, 86400),
-                    vol.Required(
-                        CONF_ASSET_COUNT,
-                        default=current.get(CONF_ASSET_COUNT, DEFAULT_ASSET_COUNT),
-                    ): _number_selector(1, 500),
-                }
-            ),
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={"docs_url": docs_url} if has_json else {},
+            errors=errors,
         )

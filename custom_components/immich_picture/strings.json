@@ -85,7 +85,11 @@
         "data": {
           "rotation_interval": "Photo rotation interval (seconds)",
           "scan_interval": "API refresh interval (seconds)",
-          "asset_count": "Number of assets to load"
+          "asset_count": "Number of assets to load",
+          "api_params": "Filter (JSON)"
+        },
+        "data_description": {
+          "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields."
         }
       }
     }

@@ -42,8 +42,14 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self.api_key: str = config_entry.data[CONF_API_KEY]
         self.endpoint: str = config_entry.data[CONF_API_ENDPOINT]
         self.album_id: str | None = config_entry.data.get(CONF_ALBUM_ID)
-        self.asset_count: int = config_entry.data.get(CONF_ASSET_COUNT, DEFAULT_ASSET_COUNT)
-        self.api_params: dict[str, Any] = config_entry.data.get(CONF_API_PARAMS, {})
+        self.asset_count: int = config_entry.options.get(
+            CONF_ASSET_COUNT,
+            config_entry.data.get(CONF_ASSET_COUNT, DEFAULT_ASSET_COUNT),
+        )
+        self.api_params: dict[str, Any] = config_entry.options.get(
+            CONF_API_PARAMS,
+            config_entry.data.get(CONF_API_PARAMS, {}),
+        )
 
         scan_interval: int = config_entry.options.get(
             CONF_SCAN_INTERVAL,
