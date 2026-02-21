@@ -92,16 +92,27 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._api_key = api_key
                 return await self.async_step_endpoint()
 
+        # Pre-populate from an existing entry so the user doesn't have to
+        # re-type the same host/key when adding a second endpoint.
+        existing = self.hass.config_entries.async_entries(DOMAIN)
+        prev = existing[0].data if existing else {}
+        suggested_host = prev.get(CONF_HOST, "http://192.168.1.100:2283")
+        suggested_key = prev.get(CONF_API_KEY, "")
+
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_HOST, default="http://192.168.1.100:2283"
+                        CONF_HOST,
+                        description={"suggested_value": suggested_host},
                     ): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.URL)
                     ),
-                    vol.Required(CONF_API_KEY): TextSelector(
+                    vol.Required(
+                        CONF_API_KEY,
+                        description={"suggested_value": suggested_key},
+                    ): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
                 }
