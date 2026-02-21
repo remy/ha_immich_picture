@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 from datetime import timedelta
 from typing import Any
 
@@ -43,6 +44,11 @@ class ImmichCamera(Camera):
     requests a snapshot (e.g. for the dashboard picture card).  A separate
     timer advances the current photo index at the configured rotation interval
     so the displayed image changes over time without requiring a page reload.
+
+    Each successfully downloaded thumbnail is written to a per-asset cache file
+    on disk.  If Immich is unreachable, the most recent cached file for the
+    requested asset is served instead, making the entity resilient to planned
+    or unplanned server downtime.
     """
 
     _attr_has_entity_name = True
@@ -63,6 +69,7 @@ class ImmichCamera(Camera):
         self._current_index: int = 0
         self._current_image_bytes: bytes | None = None
         self._rotation_unsubscribe = None
+        self._cache_dir: pathlib.Path | None = None
 
         endpoint_label = API_ENDPOINTS.get(
             config_entry.data.get(CONF_API_ENDPOINT, ""), "Immich Picture"
@@ -85,6 +92,15 @@ class ImmichCamera(Camera):
     async def async_added_to_hass(self) -> None:
         """Register coordinator listener and start the rotation timer."""
         await super().async_added_to_hass()
+
+        # Prepare the on-disk image cache directory
+        cache_dir = pathlib.Path(
+            self.hass.config.path(DOMAIN, "image_cache", self._config_entry.entry_id)
+        )
+        await self.hass.async_add_executor_job(
+            lambda: cache_dir.mkdir(parents=True, exist_ok=True)
+        )
+        self._cache_dir = cache_dir
 
         # Listen for coordinator data updates so we reset gracefully
         self.async_on_remove(
@@ -169,7 +185,13 @@ class ImmichCamera(Camera):
         self.async_write_ha_state()
 
     async def _load_current_image(self) -> None:
-        """Fetch image bytes for the current asset from Immich."""
+        """Fetch image bytes for the current asset from Immich.
+
+        On success the bytes are written to disk so they can be served if
+        Immich is unavailable during a later rotation cycle.  On any failure
+        the cached file for this asset is used instead; if no cache exists the
+        last in-memory image is preserved unchanged.
+        """
         assets = self._coordinator.data
         if not assets:
             return
@@ -180,6 +202,10 @@ class ImmichCamera(Camera):
         if not asset_id:
             return
 
+        cache_file = (
+            self._cache_dir / f"{asset_id}.jpg" if self._cache_dir is not None else None
+        )
+
         url = f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail?size=preview&edited=true&apiKey={self._coordinator.api_key}"
         session = async_get_clientsession(self.hass)
         try:
@@ -189,12 +215,32 @@ class ImmichCamera(Camera):
                 timeout=15,
             ) as resp:
                 if resp.status == 200:
-                    self._current_image_bytes = await resp.read()
+                    data = await resp.read()
+                    self._current_image_bytes = data
+                    if cache_file is not None:
+                        await self.hass.async_add_executor_job(
+                            cache_file.write_bytes, data
+                        )
                 else:
                     _LOGGER.warning(
                         "Immich returned HTTP %s for asset thumbnail %s",
                         resp.status,
                         asset_id,
                     )
+                    await self._serve_from_cache(cache_file)
         except Exception as err:
             _LOGGER.debug("Error fetching Immich thumbnail for %s: %s", asset_id, err)
+            await self._serve_from_cache(cache_file)
+
+    async def _serve_from_cache(self, cache_file: pathlib.Path | None) -> None:
+        """Load image bytes from the on-disk cache for this asset, if available."""
+        if cache_file is None:
+            return
+        try:
+            data = await self.hass.async_add_executor_job(cache_file.read_bytes)
+            self._current_image_bytes = data
+            _LOGGER.debug("Serving cached image: %s", cache_file.name)
+        except FileNotFoundError:
+            pass  # No cache yet for this asset; keep the last in-memory image
+        except OSError as err:
+            _LOGGER.debug("Could not read cache file %s: %s", cache_file, err)
