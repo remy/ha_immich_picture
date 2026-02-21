@@ -180,7 +180,7 @@ class ImmichCamera(Camera):
         if not asset_id:
             return
 
-        url = f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail?size=preview"
+        url = f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail?size=preview&edited=true&apiKey={self._coordinator.api_key}"
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(
