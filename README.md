@@ -123,17 +123,22 @@ Changes take effect immediately — the integration reloads automatically when y
 
 ## Image Cache
 
-Every thumbnail that is successfully downloaded is written to:
+Every thumbnail that is successfully downloaded is written to a slot file named after its position in the slideshow:
 
 ```
-<ha-config-dir>/immich_picture/image_cache/<entry-id>/<asset-id>.jpg
+<ha-config-dir>/immich_picture/image_cache/<entry-id>/0.jpg
+<ha-config-dir>/immich_picture/image_cache/<entry-id>/1.jpg
+…
+<ha-config-dir>/immich_picture/image_cache/<entry-id>/N.jpg
 ```
 
-**When Immich is available** the cache file is overwritten with the freshest version.
+The number of files is capped at the configured **Number of assets** value. Each slot file is overwritten in-place as the slideshow cycles through positions, so the cache is self-maintaining with no unbounded growth.
 
-**When Immich is unreachable** (planned downtime, network outage, server restart) the integration serves the last cached file for each photo instead of showing a blank or broken image. If a photo has never been fetched before and therefore has no cache entry, the previously displayed image is preserved unchanged.
+**When Immich is available** the slot file is overwritten with the freshest image for that position.
 
-Cache files accumulate over time but are small (typically 50–200 KB each). You can delete the cache directory at any time — it is recreated automatically on the next successful fetch.
+**When Immich is unreachable** (planned downtime, network outage, server restart) the integration serves the last cached file for that slot instead of showing a blank or broken image. If a slot has never been fetched before and has no cache file yet, the previously displayed image is preserved unchanged.
+
+Reducing the **Number of assets** setting can leave a small number of orphaned high-numbered slot files on disk, but these are never displayed. You can delete the cache directory at any time — it is recreated automatically on the next successful fetch.
 
 ---
 

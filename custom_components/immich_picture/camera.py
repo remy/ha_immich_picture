@@ -203,7 +203,7 @@ class ImmichCamera(Camera):
             return
 
         cache_file = (
-            self._cache_dir / f"{asset_id}.jpg" if self._cache_dir is not None else None
+            self._cache_dir / f"{idx}.jpg" if self._cache_dir is not None else None
         )
 
         url = f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail?size=preview&edited=true&apiKey={self._coordinator.api_key}"
