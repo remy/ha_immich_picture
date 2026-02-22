@@ -172,6 +172,11 @@ class ImmichCamera(Camera):
 
         # Schedule fetching the new current image without blocking the callback
         self.hass.async_create_task(self._load_current_image())
+
+        # Prune any slot files beyond the new asset count
+        if self._cache_dir is not None and assets:
+            self.hass.async_create_task(self._prune_cache(len(assets)))
+
         self.async_write_ha_state()
 
     async def _async_rotate(self, _now=None) -> None:
@@ -183,6 +188,18 @@ class ImmichCamera(Camera):
         self._current_index = (self._current_index + 1) % len(assets)
         await self._load_current_image()
         self.async_write_ha_state()
+
+    async def _prune_cache(self, keep: int) -> None:
+        """Delete slot files whose index is >= the current asset count."""
+        def _delete_excess() -> None:
+            for f in self._cache_dir.glob("*.jpg"):
+                try:
+                    if int(f.stem) >= keep:
+                        f.unlink()
+                except (ValueError, OSError):
+                    pass
+
+        await self.hass.async_add_executor_job(_delete_excess)
 
     async def _load_current_image(self) -> None:
         """Fetch image bytes for the current asset from Immich.
