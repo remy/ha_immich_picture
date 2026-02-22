@@ -83,12 +83,18 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # (Videos cannot be served as still images.)
         image_assets = [a for a in assets if a.get("type") == ASSET_TYPE_IMAGE]
 
-        if not image_assets:
+        # Keep only landscape (wide) images; skip portraits and squares.
+        landscape_assets = [
+            a for a in image_assets
+            if a.get("width") and a.get("height") and a["width"] > a["height"]
+        ]
+
+        if not landscape_assets:
             _LOGGER.warning(
-                "Immich returned no image assets for endpoint '%s'", self.endpoint
+                "Immich returned no landscape image assets for endpoint '%s'", self.endpoint
             )
 
-        return image_assets
+        return landscape_assets
 
     async def _fetch_assets(self, session) -> list[dict[str, Any]]:
         """Route to the correct API call based on the configured endpoint."""
