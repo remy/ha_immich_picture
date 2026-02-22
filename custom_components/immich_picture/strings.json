@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Immich Picture",
+        "description": "Enter your Immich server address and API key. You can generate an API key in Immich under Account Settings → API Keys.",
+        "data": {
+          "host": "Immich URL",
+          "api_key": "API Key"
+        },
+        "data_description": {
+          "host": "Full URL including port, e.g. http://192.168.1.100:2283",
+          "api_key": "Your Immich API key (kept secret)"
+        }
+      },
+      "endpoint": {
+        "title": "Choose API Endpoint",
+        "description": "Select which Immich API endpoint the slideshow will use to retrieve photos.",
+        "data": {
+          "api_endpoint": "Endpoint"
+        }
+      },
+      "random_params": {
+        "title": "Random Assets – Options",
+        "description": "Configure how many random photos to load each refresh cycle. Optionally provide a JSON body to filter results (e.g. by person). Example: {example}\n\n[API documentation]({docs_url})",
+        "data": {
+          "asset_count": "Number of assets",
+          "random_query": "Filter (JSON, optional)"
+        }
+      },
+      "all_params": {
+        "title": "All Assets – Options",
+        "description": "Configure how many assets to load and the sort order.",
+        "data": {
+          "asset_count": "Number of assets",
+          "order": "Sort order"
+        }
+      },
+      "album_params": {
+        "title": "Album Assets – Options",
+        "description": "Select the album to use as the photo source.",
+        "data": {
+          "album_id": "Album",
+          "asset_count": "Number of assets"
+        }
+      },
+      "favorites_params": {
+        "title": "Favorite Assets – Options",
+        "description": "Configure how many favorite photos to load each refresh cycle.",
+        "data": {
+          "asset_count": "Number of assets"
+        }
+      },
+      "search_params": {
+        "title": "Search Metadata – Options",
+        "description": "Provide a JSON object of Immich search metadata fields. Example: {example}\n\n[API documentation]({docs_url})",
+        "data": {
+          "asset_count": "Number of results",
+          "search_query": "Search query (JSON)"
+        }
+      },
+      "intervals": {
+        "title": "Timing",
+        "description": "Set how often the displayed photo rotates and how often new photos are fetched from Immich Picture.",
+        "data": {
+          "rotation_interval": "Photo rotation interval (seconds)",
+          "scan_interval": "API refresh interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Immich. Check the URL and ensure Immich is reachable.",
+      "invalid_auth": "Invalid API key. Please check your Immich API key.",
+      "cannot_fetch_albums": "Could not load albums from Immich. The entry was left empty; you may type an album ID manually.",
+      "invalid_json": "Must be a valid JSON object, e.g. {\"city\": \"Paris\"}"
+    },
+    "abort": {
+      "already_configured": "This Immich Picture instance is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Immich Picture Options",
+        "data": {
+          "rotation_interval": "Photo rotation interval (seconds)",
+          "scan_interval": "API refresh interval (seconds)",
+          "asset_count": "Number of assets to load",
+          "api_params": "Filter (JSON)"
+        },
+        "data_description": {
+          "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "domain": "immich_picture",
+  "name": "Immich Picture",
+  "config_flow": true,
+  "documentation": "https://immich.app",
+  "requirements": [],
+  "codeowners": [],
+  "version": "1.0.0",
+  "iot_class": "local_polling"
+}
