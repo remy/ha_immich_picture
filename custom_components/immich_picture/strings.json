@@ -1,4 +1,11 @@
 {
+  "entity": {
+    "sensor": {
+      "cache_path": {
+        "name": "Image Cache Path"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {

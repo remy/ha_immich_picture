@@ -157,6 +157,8 @@ The entity also exposes state attributes you can use in automations or template 
 | `current_index` | 1-based position in the pool |
 | `endpoint` | Configured photo source identifier |
 
+Each device also includes a **diagnostic sensor** (`sensor.immich_picture_image_cache_path`) that shows the full path to the on-disk image cache directory for that instance. This is useful for locating cached files when debugging or for manual cache management.
+
 ---
 
 ## Troubleshooting

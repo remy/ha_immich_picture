@@ -1,9 +1,0 @@
-build_from:
-  aarch64: docker.io/library/node:20-bookworm-slim
-  amd64: docker.io/library/node:20-bookworm-slim
-  armv7: docker.io/library/arm32v7/node:20-bookworm-slim
-labels:
-  org.opencontainers.image.title: "Scraper Home Assistant add-on"
-  org.opencontainers.image.description: "Node/Puppeteer scraper with upload UI for Home Assistant."
-  org.opencontainers.image.source: "https://github.com/remysharp/scraper"
-  org.opencontainers.image.licenses: "MIT"

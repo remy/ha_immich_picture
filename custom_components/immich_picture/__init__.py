@@ -12,7 +12,7 @@ from .coordinator import ImmichDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["camera"]
+PLATFORMS = ["camera", "sensor"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
