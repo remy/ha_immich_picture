@@ -102,6 +102,10 @@ class ImmichCamera(Camera):
         )
         self._cache_dir = cache_dir
 
+        # Restore a displayable image immediately after startup, even if the
+        # initial Immich refresh failed and no asset list is available yet.
+        await self._restore_startup_image_from_cache()
+
         # Listen for coordinator data updates so we reset gracefully
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
@@ -223,7 +227,10 @@ class ImmichCamera(Camera):
             self._cache_dir / f"{idx}.jpg" if self._cache_dir is not None else None
         )
 
-        url = f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail?size=preview&edited=true&apiKey={self._coordinator.api_key}"
+        url = (
+            f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail"
+            "?size=preview&edited=true"
+        )
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(
@@ -248,6 +255,35 @@ class ImmichCamera(Camera):
         except Exception as err:
             _LOGGER.debug("Error fetching Immich thumbnail for %s: %s", asset_id, err)
             await self._serve_from_cache(cache_file)
+
+    async def _restore_startup_image_from_cache(self) -> None:
+        """Restore the first available cached image during Home Assistant startup."""
+        if self._cache_dir is None or self._current_image_bytes is not None:
+            return
+
+        cache_file = await self.hass.async_add_executor_job(
+            self._find_first_cached_image
+        )
+        if cache_file is not None:
+            await self._serve_from_cache(cache_file)
+
+    def _find_first_cached_image(self) -> pathlib.Path | None:
+        """Return the lowest-numbered cached slot file, if any exists."""
+        if self._cache_dir is None:
+            return None
+
+        candidates: list[tuple[int, pathlib.Path]] = []
+        for cache_file in self._cache_dir.glob("*.jpg"):
+            try:
+                candidates.append((int(cache_file.stem), cache_file))
+            except ValueError:
+                continue
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda item: item[0])
+        return candidates[0][1]
 
     async def _serve_from_cache(self, cache_file: pathlib.Path | None) -> None:
         """Load image bytes from the on-disk cache for this asset, if available."""

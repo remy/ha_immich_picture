@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import DOMAIN
 from .coordinator import ImmichDataUpdateCoordinator
@@ -18,7 +19,14 @@ PLATFORMS = ["camera", "sensor"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Immich from a config entry."""
     coordinator = ImmichDataUpdateCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except UpdateFailed as err:
+        _LOGGER.warning(
+            "Initial refresh failed for %s; continuing with cached image fallback: %s",
+            entry.title,
+            err,
+        )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 

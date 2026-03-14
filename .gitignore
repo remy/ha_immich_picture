@@ -5,3 +5,4 @@ scripts/*
 .env.*
 node_modules
 */logs/*
+__pycache__/
