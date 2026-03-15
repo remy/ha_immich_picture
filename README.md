@@ -22,6 +22,14 @@ A Home Assistant custom integration that turns your [Immich](https://immich.app)
 - An Immich instance reachable from your HA host (local network or VPN)
 - An Immich API key (generate one under **Account Settings → API Keys**)
 
+### Immich Permissions
+
+The following permissions are needed for all the five photo sources to work:
+
+- `asset.read` - required for the random, recent, favourite and metadata search
+- `album.read` - required for the album request
+- `asset.view` - required to view the images in the Home Assistant entity
+
 ---
 
 ## Installation
