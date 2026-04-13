@@ -93,9 +93,13 @@
           "rotation_interval": "Photo rotation interval (seconds)",
           "scan_interval": "API refresh interval (seconds)",
           "asset_count": "Number of assets to load",
+          "crossfade_enabled": "Enable crossfade dissolve",
+          "crossfade_duration": "Crossfade duration (seconds)",
           "api_params": "Filter (JSON)"
         },
         "data_description": {
+          "crossfade_enabled": "When enabled, a single 50% blended frame is shown briefly between photos to soften the transition.",
+          "crossfade_duration": "How long the blended bridge frame is displayed before the next photo appears.",
           "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields."
         }
       }

@@ -11,6 +11,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -28,10 +29,14 @@ from .const import (
     CONF_API_PARAMS,
     CONF_API_KEY,
     CONF_ASSET_COUNT,
+    CONF_CROSSFADE_DURATION,
+    CONF_CROSSFADE_ENABLED,
     CONF_HOST,
     CONF_ROTATION_INTERVAL,
     CONF_SCAN_INTERVAL,
     DEFAULT_ASSET_COUNT,
+    DEFAULT_CROSSFADE_DURATION,
+    DEFAULT_CROSSFADE_ENABLED,
     DEFAULT_ROTATION_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -463,6 +468,14 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_ROTATION_INTERVAL: int(user_input[CONF_ROTATION_INTERVAL]),
                 CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
                 CONF_ASSET_COUNT: int(user_input[CONF_ASSET_COUNT]),
+                CONF_CROSSFADE_ENABLED: bool(
+                    user_input.get(CONF_CROSSFADE_ENABLED, DEFAULT_CROSSFADE_ENABLED)
+                ),
+                CONF_CROSSFADE_DURATION: float(
+                    user_input.get(
+                        CONF_CROSSFADE_DURATION, DEFAULT_CROSSFADE_DURATION
+                    )
+                ),
             }
             if has_json:
                 raw = user_input.get(CONF_API_PARAMS, "{}").strip() or "{}"
@@ -494,6 +507,22 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_ASSET_COUNT,
                 default=current.get(CONF_ASSET_COUNT, DEFAULT_ASSET_COUNT),
             ): _number_selector(1, 500),
+            vol.Required(
+                CONF_CROSSFADE_ENABLED,
+                default=current.get(
+                    CONF_CROSSFADE_ENABLED, DEFAULT_CROSSFADE_ENABLED
+                ),
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_CROSSFADE_DURATION,
+                default=current.get(
+                    CONF_CROSSFADE_DURATION, DEFAULT_CROSSFADE_DURATION
+                ),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0.2, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
+                )
+            ),
         }
 
         if has_json:
