@@ -25,6 +25,7 @@ from .const import (
     ENDPOINT_ALL,
     ENDPOINT_ALBUM,
     ENDPOINT_FAVORITES,
+    ENDPOINT_MEMORIES,
     ENDPOINT_RANDOM,
     ENDPOINT_SEARCH,
     ASSET_TYPE_IMAGE,
@@ -137,6 +138,8 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             return await self._fetch_favorites(session)
         if self.endpoint == ENDPOINT_SEARCH:
             return await self._fetch_search(session)
+        if self.endpoint == ENDPOINT_MEMORIES:
+            return await self._fetch_memories(session)
 
         raise UpdateFailed(f"Unknown endpoint configured: {self.endpoint}")
 
@@ -198,3 +201,17 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         return (
             data.get("assets", {}).get("items", []) if isinstance(data, dict) else []
         )
+
+    async def _fetch_memories(self, session) -> list[dict[str, Any]]:
+        url = f"{self.host}/api/memories"
+        params: dict[str, Any] = {"size": self.asset_count}
+        params.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
+        async with session.get(url, headers=self._headers, params=params) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        if not isinstance(data, list):
+            return []
+        assets: list[dict[str, Any]] = []
+        for memory in data:
+            assets.extend(memory.get("assets", []))
+        return assets

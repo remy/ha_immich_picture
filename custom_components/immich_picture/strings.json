@@ -66,6 +66,15 @@
           "search_query": "Search query (JSON)"
         }
       },
+      "memories_params": {
+        "title": "Memory Assets – Options",
+        "description": "Configure how many memories to load each refresh cycle. Each memory may contain multiple assets.",
+        "data": {
+          "asset_count": "Number of memories",
+          "order": "Sort order",
+          "isSaved": "Saved memories only"
+        }
+      },
       "intervals": {
         "title": "Timing",
         "description": "Set how often the displayed photo rotates and how often new photos are fetched from Immich Picture.",

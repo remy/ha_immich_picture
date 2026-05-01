@@ -38,6 +38,7 @@ from .const import (
     ENDPOINT_ALBUM,
     ENDPOINT_ALL,
     ENDPOINT_FAVORITES,
+    ENDPOINT_MEMORIES,
     ENDPOINT_RANDOM,
     ENDPOINT_SEARCH,
     API_ENDPOINTS,
@@ -142,6 +143,8 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_favorites_params()
             if self._endpoint == ENDPOINT_SEARCH:
                 return await self.async_step_search_params()
+            if self._endpoint == ENDPOINT_MEMORIES:
+                return await self.async_step_memories_params()
 
         return self.async_show_form(
             step_id="endpoint",
@@ -350,6 +353,45 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "docs_url": "https://api.immich.app/endpoints/search/searchAssets",
             },
             errors=errors,
+        )
+
+    # ------------------------------------------------------------------
+    # Step 3f – Memory Assets params
+    # ------------------------------------------------------------------
+
+    async def async_step_memories_params(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Configure filters for the 'Memory Assets' endpoint."""
+        if user_input is not None:
+            self._collected[CONF_ASSET_COUNT] = int(user_input[CONF_ASSET_COUNT])
+            extra: dict[str, Any] = {}
+            if user_input.get("order"):
+                extra["order"] = user_input["order"]
+            if user_input.get("isSaved") is True:
+                extra["isSaved"] = True
+            self._collected[CONF_API_PARAMS] = extra
+            return await self.async_step_intervals()
+
+        return self.async_show_form(
+            step_id="memories_params",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ASSET_COUNT, default=10
+                    ): _number_selector(1, 100),
+                    vol.Optional("order", default="desc"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(value="desc", label="Newest first"),
+                                SelectOptionDict(value="asc", label="Oldest first"),
+                                SelectOptionDict(value="random", label="Random"),
+                            ]
+                        )
+                    ),
+                    vol.Optional("isSaved", default=False): bool,
+                }
+            ),
         )
 
     # ------------------------------------------------------------------
