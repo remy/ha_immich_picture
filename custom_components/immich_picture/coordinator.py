@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -204,7 +204,10 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
     async def _fetch_memories(self, session) -> list[dict[str, Any]]:
         url = f"{self.host}/api/memories"
-        params: dict[str, Any] = {"size": self.asset_count}
+        # `for` filters memories by date; default to "now" so we get today's
+        # On-This-Day memories each refresh.
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        params: dict[str, Any] = {"size": self.asset_count, "for": now_iso}
         params.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
         async with session.get(url, headers=self._headers, params=params) as resp:
             resp.raise_for_status()
