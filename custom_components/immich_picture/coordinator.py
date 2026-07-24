@@ -56,6 +56,8 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
 
+        self.server_version: int = -1;
+
         super().__init__(
             hass,
             _LOGGER,
@@ -124,6 +126,15 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         return combined
 
+    async def _fetch_version(self, session) -> int:
+        if self.server_version == -1:
+            url = f"{self.host}/api/server/version"
+            async with session.get(url, headers=self._headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            self.server_version = data.get("major") if isinstance(data, dict) else -1
+        return self.server_version
+    
     async def _fetch_assets(self, session) -> list[dict[str, Any]]:
         """Route to the correct API call based on the configured endpoint."""
 
@@ -169,11 +180,22 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         if not self.album_id:
             _LOGGER.error("Album endpoint selected but no album_id configured")
             return []
-        url = f"{self.host}/api/albums/{self.album_id}"
-        async with session.get(url, headers=self._headers) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-        return data.get("assets", []) if isinstance(data, dict) else []
+        version = await self._fetch_version(session)
+        if version >= 3:
+            url = f"{self.host}/api/search/metadata"
+            body: dict[str, Any] = {
+                "albumIds": [self.album_id],
+            }
+            async with session.post(url, headers=self._headers, json=body) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            return data.get("assets").get("items", []) if isinstance(data, dict) else []
+        else:
+            url = f"{self.host}/api/albums/{self.album_id}"
+            async with session.get(url, headers=self._headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            return data.get("assets", []) if isinstance(data, dict) else []
 
     async def _fetch_favorites(self, session) -> list[dict[str, Any]]:
         url = f"{self.host}/api/search/metadata"
