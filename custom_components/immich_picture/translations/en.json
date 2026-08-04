@@ -68,11 +68,14 @@
       },
       "memories_params": {
         "title": "Memory Assets – Options",
-        "description": "Configure how many memories to load each refresh cycle. Each memory may contain multiple assets.",
+        "description": "Configure how many memories to load each refresh cycle. Each memory may contain multiple assets. The 'For' date filters memories to a specific date (ISO 8601, e.g. 2024-06-15T00:00:00Z).",
         "data": {
           "asset_count": "Number of memories",
           "order": "Sort order",
-          "isSaved": "Saved memories only"
+          "type": "Memory type",
+          "for": "For date (ISO 8601, optional)",
+          "isSaved": "Saved memories only",
+          "isTrashed": "Include trashed memories"
         }
       },
       "intervals": {
@@ -88,7 +91,8 @@
       "cannot_connect": "Unable to connect to Immich. Check the URL and ensure Immich is reachable.",
       "invalid_auth": "Invalid API key. Please check your Immich API key.",
       "cannot_fetch_albums": "Could not load albums from Immich. The entry was left empty; you may type an album ID manually.",
-      "invalid_json": "Must be a valid JSON object, e.g. {\"city\": \"Paris\"}"
+      "invalid_json": "Must be a valid JSON object, e.g. {\"city\": \"Paris\"}",
+      "invalid_datetime": "Must be a valid ISO 8601 date-time, e.g. 2024-06-15T00:00:00Z"
     },
     "abort": {
       "already_configured": "This Immich Picture instance is already configured."

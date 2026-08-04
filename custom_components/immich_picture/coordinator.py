@@ -207,8 +207,13 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # `for` filters memories by date; default to "now" so we get today's
         # On-This-Day memories each refresh.
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        params: dict[str, Any] = {"size": self.asset_count, "for": now_iso}
-        params.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
+        raw: dict[str, Any] = {"size": self.asset_count, "for": now_iso}
+        raw.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
+        # aiohttp query params must be str/int/float; booleans need lowercase.
+        params: dict[str, str] = {
+            k: ("true" if v else "false") if isinstance(v, bool) else str(v)
+            for k, v in raw.items()
+        }
         async with session.get(url, headers=self._headers, params=params) as resp:
             resp.raise_for_status()
             data = await resp.json()

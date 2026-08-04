@@ -363,6 +363,8 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         """Configure filters for the 'Memory Assets' endpoint."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
             self._collected[CONF_ASSET_COUNT] = int(user_input[CONF_ASSET_COUNT])
             extra: dict[str, Any] = {}
@@ -370,8 +372,25 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 extra["order"] = user_input["order"]
             if user_input.get("isSaved") is True:
                 extra["isSaved"] = True
-            self._collected[CONF_API_PARAMS] = extra
-            return await self.async_step_intervals()
+            if user_input.get("isTrashed") is True:
+                extra["isTrashed"] = True
+            if user_input.get("type"):
+                extra["type"] = user_input["type"]
+            raw_for = (user_input.get("for") or "").strip()
+            if raw_for:
+                # Basic ISO 8601 sanity check; the API expects date-time.
+                from datetime import datetime
+
+                try:
+                    datetime.fromisoformat(raw_for.replace("Z", "+00:00"))
+                except ValueError:
+                    errors["for"] = "invalid_datetime"
+                else:
+                    extra["for"] = raw_for
+
+            if not errors:
+                self._collected[CONF_API_PARAMS] = extra
+                return await self.async_step_intervals()
 
         return self.async_show_form(
             step_id="memories_params",
@@ -389,9 +408,23 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             ]
                         )
                     ),
+                    vol.Optional("type", default="on_this_day"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(
+                                    value="on_this_day", label="On this day"
+                                ),
+                            ]
+                        )
+                    ),
+                    vol.Optional("for", default=""): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.TEXT)
+                    ),
                     vol.Optional("isSaved", default=False): bool,
+                    vol.Optional("isTrashed", default=False): bool,
                 }
             ),
+            errors=errors,
         )
 
     # ------------------------------------------------------------------
