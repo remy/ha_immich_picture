@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import io
 import logging
 import pathlib
 from datetime import timedelta
+from time import monotonic
 from typing import Any
 
 from PIL import Image
@@ -25,6 +25,7 @@ from .const import (
     CONF_CROSSFADE_DURATION,
     CONF_CROSSFADE_ENABLED,
     CONF_ROTATION_INTERVAL,
+    CROSSFADE_STEPS,
     DEFAULT_CROSSFADE_DURATION,
     DEFAULT_CROSSFADE_ENABLED,
     DEFAULT_ROTATION_INTERVAL,
@@ -78,7 +79,10 @@ class ImmichCamera(Camera):
         self._current_image_bytes: bytes | None = None
         self._next_index: int | None = None
         self._next_image_bytes: bytes | None = None
-        self._crossfading: bool = False
+        self._prev_image_bytes: bytes | None = None
+        self._transition_started: float | None = None
+        self._blend_cache: tuple[int, bytes] | None = None
+        self._rotation_interval: float = DEFAULT_ROTATION_INTERVAL
         self._rotation_unsubscribe = None
         self._cache_dir: pathlib.Path | None = None
 
@@ -127,6 +131,7 @@ class ImmichCamera(Camera):
             CONF_ROTATION_INTERVAL,
             self._config_entry.data.get(CONF_ROTATION_INTERVAL, DEFAULT_ROTATION_INTERVAL),
         )
+        self._rotation_interval = float(rotation_interval)
         self._rotation_unsubscribe = async_track_time_interval(
             self.hass,
             self._async_rotate,
@@ -150,7 +155,16 @@ class ImmichCamera(Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return the bytes for the currently displayed photo."""
+        """Return the bytes for the currently displayed photo.
+
+        While a crossfade is in flight the outgoing and incoming photos are
+        blended on demand at whatever progress the caller asks at, so the
+        dissolve renders at the client's own refresh rate instead of this
+        entity having to guess it.
+        """
+        frame = await self._async_blended_frame()
+        if frame is not None:
+            return frame
         return self._current_image_bytes
 
     # ------------------------------------------------------------------
@@ -183,7 +197,7 @@ class ImmichCamera(Camera):
             "current_index": idx + 1,
             "endpoint": self._config_entry.data.get(CONF_API_ENDPOINT),
             "next_asset_id": next_asset_id,
-            "crossfading": self._crossfading,
+            "crossfading": self._transition_progress() is not None,
         }
 
     # ------------------------------------------------------------------
@@ -214,58 +228,89 @@ class ImmichCamera(Camera):
         self.async_write_ha_state()
 
     def _crossfade_settings(self) -> tuple[bool, float]:
-        """Read the (enabled, duration) crossfade settings from options."""
+        """Read the (enabled, duration) crossfade settings from options.
+
+        The duration is clamped to the rotation interval so a fade always
+        finishes before the next photo is due.
+        """
         opts = {**self._config_entry.data, **self._config_entry.options}
-        enabled = bool(
-            opts.get(CONF_CROSSFADE_ENABLED, DEFAULT_CROSSFADE_ENABLED)
-        )
+        enabled = bool(opts.get(CONF_CROSSFADE_ENABLED, DEFAULT_CROSSFADE_ENABLED))
         duration = float(
             opts.get(CONF_CROSSFADE_DURATION, DEFAULT_CROSSFADE_DURATION)
         )
-        return enabled, duration
+        return enabled, min(duration, self._rotation_interval)
+
+    def _transition_progress(self) -> float | None:
+        """Return how far the running crossfade has got, or ``None`` if idle."""
+        if self._transition_started is None or self._prev_image_bytes is None:
+            return None
+
+        enabled, duration = self._crossfade_settings()
+        if not enabled or duration <= 0:
+            return None
+
+        progress = (monotonic() - self._transition_started) / duration
+        return progress if progress < 1 else None
+
+    def _end_transition(self) -> None:
+        """Drop the outgoing photo and any blend memoised for it."""
+        self._prev_image_bytes = None
+        self._transition_started = None
+        self._blend_cache = None
+
+    async def _async_blended_frame(self) -> bytes | None:
+        """Return the current crossfade frame, or ``None`` if not fading.
+
+        Progress is quantised into ``CROSSFADE_STEPS`` buckets and the most
+        recent blend is memoised, so several clients polling within the same
+        bucket share one composite instead of each paying for a fresh one.
+        """
+        progress = self._transition_progress()
+        if progress is None:
+            self._end_transition()
+            return None
+
+        outgoing = self._prev_image_bytes
+        incoming = self._current_image_bytes
+        if outgoing is None or incoming is None:
+            return None
+
+        step = round(progress * CROSSFADE_STEPS)
+        if step <= 0:
+            return outgoing
+
+        if self._blend_cache is not None and self._blend_cache[0] == step:
+            return self._blend_cache[1]
+
+        try:
+            blended = await self.hass.async_add_executor_job(
+                self._compose_blend, outgoing, incoming, step / CROSSFADE_STEPS
+            )
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.debug("Crossfade blend failed: %s", err)
+            self._end_transition()
+            return None
+
+        self._blend_cache = (step, blended)
+        return blended
 
     async def _async_rotate(self, _now=None) -> None:
         """Advance to the next photo in the list.
 
-        If crossfade is enabled and both the current image and a prefetched
-        next image are available, a single 50 % blended "bridge" frame is
-        published for the configured duration before the new image is shown,
-        producing a soft dissolve instead of a hard cut.
+        When crossfade is enabled the outgoing photo is kept alongside the new
+        one and a timer is started; the blending itself happens lazily in
+        :meth:`async_camera_image`, so rotation never sleeps and the timing of
+        the dissolve is decoupled from the rotation schedule.
         """
         assets = self._coordinator.data
         if not assets:
             return
 
         new_index = (self._current_index + 1) % len(assets)
-
-        crossfade_enabled, crossfade_duration = self._crossfade_settings()
-        prev_bytes = self._current_image_bytes
+        outgoing = self._current_image_bytes
         next_bytes = (
-            self._next_image_bytes
-            if self._next_index == new_index
-            else None
+            self._next_image_bytes if self._next_index == new_index else None
         )
-
-        if (
-            crossfade_enabled
-            and prev_bytes is not None
-            and next_bytes is not None
-            and crossfade_duration > 0
-        ):
-            try:
-                bridge = await self.hass.async_add_executor_job(
-                    self._compose_blend, prev_bytes, next_bytes
-                )
-            except Exception as err:  # pylint: disable=broad-except
-                _LOGGER.debug("Crossfade blend failed: %s", err)
-            else:
-                self._current_image_bytes = bridge
-                self._crossfading = True
-                self.async_write_ha_state()
-                try:
-                    await asyncio.sleep(crossfade_duration)
-                finally:
-                    self._crossfading = False
 
         # Promote the prefetched next image if it matches; otherwise fetch it.
         self._current_index = new_index
@@ -273,6 +318,21 @@ class ImmichCamera(Camera):
             self._current_image_bytes = next_bytes
         else:
             await self._load_current_image()
+
+        crossfade_enabled, crossfade_duration = self._crossfade_settings()
+        incoming = self._current_image_bytes
+        if (
+            crossfade_enabled
+            and crossfade_duration > 0
+            and outgoing is not None
+            and incoming is not None
+            and outgoing is not incoming
+        ):
+            self._prev_image_bytes = outgoing
+            self._transition_started = monotonic()
+            self._blend_cache = None
+        else:
+            self._end_transition()
 
         # The promoted bytes are now the current image; clear the next slot
         # and prefetch a fresh one for the upcoming rotation.
@@ -315,13 +375,13 @@ class ImmichCamera(Camera):
             return None
 
     @staticmethod
-    def _compose_blend(a: bytes, b: bytes) -> bytes:
-        """Blend two JPEG images 50/50 into a single bridge frame."""
+    def _compose_blend(a: bytes, b: bytes, alpha: float) -> bytes:
+        """Blend two JPEG images, *alpha* being the weight given to *b*."""
         img_a = Image.open(io.BytesIO(a)).convert("RGB")
         img_b = Image.open(io.BytesIO(b)).convert("RGB")
         if img_a.size != img_b.size:
             img_b = img_b.resize(img_a.size, Image.LANCZOS)
-        blended = Image.blend(img_a, img_b, 0.5)
+        blended = Image.blend(img_a, img_b, alpha)
         buf = io.BytesIO()
         blended.save(buf, format="JPEG", quality=85)
         return buf.getvalue()
@@ -430,9 +490,18 @@ class ImmichCamera(Camera):
 
         next_idx = (self._current_index + 1) % len(assets)
         data = await self._fetch_image_for_index(next_idx)
-        if data is not None:
-            self._next_index = next_idx
-            self._next_image_bytes = data
+        if data is None:
+            return
+
+        # A rotation or a coordinator refresh may have moved on while we were
+        # fetching; only publish the buffer if it is still the image the next
+        # rotation actually wants.
+        assets = self._coordinator.data
+        if not assets or (self._current_index + 1) % len(assets) != next_idx:
+            return
+
+        self._next_index = next_idx
+        self._next_image_bytes = data
 
     async def _restore_startup_image_from_cache(self) -> None:
         """Restore the first available cached image during Home Assistant startup."""

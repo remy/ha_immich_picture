@@ -111,8 +111,8 @@
           "api_params": "Filter (JSON)"
         },
         "data_description": {
-          "crossfade_enabled": "When enabled, a single 50% blended frame is shown briefly between photos to soften the transition.",
-          "crossfade_duration": "How long the blended bridge frame is displayed before the next photo appears.",
+          "crossfade_enabled": "Dissolve one photo into the next instead of cutting straight to it. The blend is rendered as your dashboard refreshes the image, so how smooth it looks depends on how often the client polls.",
+          "crossfade_duration": "How long the dissolve takes. Capped at the rotation interval.",
           "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields."
         }
       }
