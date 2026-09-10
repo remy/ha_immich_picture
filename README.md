@@ -12,7 +12,7 @@ A Home Assistant custom integration that turns your [Immich](https://immich.app)
 - **Configurable refresh** – set how often a fresh batch of assets is fetched from Immich (1 min – 24 h)
 - **Resilient image cache** – every downloaded thumbnail is written to disk; if Immich is unreachable the last cached version of each photo is served instead
 - **Multiple instances** – add the integration more than once to run several slideshows (e.g. one per album or one per room) simultaneously
-- **Portrait photo support** – portrait images are automatically paired side-by-side to produce a landscape composite, so no photos are wasted
+- **Card orientation** – tell the integration whether the card is landscape or portrait, and whether photos of the other shape are combined two at a time into one composite, shown as they are, or skipped
 - **Live reconfiguration** – all timing, count, and JSON filter settings are editable via the ⚙ configure button without removing and re-adding the integration
 
 ---
@@ -115,6 +115,25 @@ Fetches photos matching a JSON metadata query using `POST /api/search/metadata`.
 
 ---
 
+## Card Orientation
+
+Photos matching the card's orientation are always served as they are. What happens to the rest is up to you:
+
+| Card orientation | Photos of the other shape | Result |
+|---|---|---|
+| Landscape | Combine *(default)* | Two portraits are composited side-by-side into one landscape frame |
+| Landscape | Show as-is | Portraits are shown on their own, letterboxed by the card |
+| Landscape | Skip | Portraits are dropped from the pool |
+| Portrait | Combine | Two landscapes are stacked one above the other into one portrait frame |
+| Portrait | Show as-is | Landscapes are shown on their own, letterboxed by the card |
+| Portrait | Skip | Landscapes are dropped from the pool |
+
+Square photos count as portrait. When combining, an odd trailing photo is dropped — on its own it would letterbox the card, which is what combining exists to avoid.
+
+Both settings are asked during setup and editable afterwards via ⚙ **Configure**.
+
+---
+
 ## Options (⚙ Configure)
 
 After initial setup you can adjust the following via the **configure** button without restarting:
@@ -124,6 +143,8 @@ After initial setup you can adjust the following via the **configure** button wi
 | Photo rotation interval | How often the displayed image advances | 5 s – 3600 s |
 | API refresh interval | How often a fresh batch is fetched from Immich | 60 s – 86400 s |
 | Number of assets | Size of the asset pool loaded per refresh | 1 – 500 |
+| Card orientation | Shape of the dashboard card the slideshow sits in | landscape, portrait |
+| Photos of the other shape | What to do with photos that do not match the card | combine, show as-is, skip |
 | Filter (JSON) | JSON body for the API request *(random & search only)* | any valid JSON object |
 
 Changes take effect immediately — the integration reloads automatically when you save.
@@ -183,6 +204,10 @@ Each device also includes a **diagnostic sensor** (`sensor.immich_picture_image_
 ---
 
 ## Changelog
+
+### 1.4.0
+
+- **Card orientation is now configurable** — side-by-side pairing of portrait photos is no longer baked in. Pick the card orientation (landscape or portrait) and choose whether photos of the other shape are combined two at a time, shown as they are, or skipped. In a portrait card two landscape photos are stacked vertically rather than paired side-by-side. Existing setups keep the previous behaviour (landscape card, portraits paired side-by-side).
 
 ### 1.3.0
 
