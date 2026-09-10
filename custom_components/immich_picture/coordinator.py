@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -25,6 +25,7 @@ from .const import (
     ENDPOINT_ALL,
     ENDPOINT_ALBUM,
     ENDPOINT_FAVORITES,
+    ENDPOINT_MEMORIES,
     ENDPOINT_RANDOM,
     ENDPOINT_SEARCH,
     ASSET_TYPE_IMAGE,
@@ -148,6 +149,8 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             return await self._fetch_favorites(session)
         if self.endpoint == ENDPOINT_SEARCH:
             return await self._fetch_search(session)
+        if self.endpoint == ENDPOINT_MEMORIES:
+            return await self._fetch_memories(session)
 
         raise UpdateFailed(f"Unknown endpoint configured: {self.endpoint}")
 
@@ -220,3 +223,25 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         return (
             data.get("assets", {}).get("items", []) if isinstance(data, dict) else []
         )
+
+    async def _fetch_memories(self, session) -> list[dict[str, Any]]:
+        url = f"{self.host}/api/memories"
+        # `for` filters memories by date; default to "now" so we get today's
+        # On-This-Day memories each refresh.
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        raw: dict[str, Any] = {"size": self.asset_count, "for": now_iso}
+        raw.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
+        # aiohttp query params must be str/int/float; booleans need lowercase.
+        params: dict[str, str] = {
+            k: ("true" if v else "false") if isinstance(v, bool) else str(v)
+            for k, v in raw.items()
+        }
+        async with session.get(url, headers=self._headers, params=params) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        if not isinstance(data, list):
+            return []
+        assets: list[dict[str, Any]] = []
+        for memory in data:
+            assets.extend(memory.get("assets", []))
+        return assets
