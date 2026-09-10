@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -25,6 +25,7 @@ from .const import (
     ENDPOINT_ALL,
     ENDPOINT_ALBUM,
     ENDPOINT_FAVORITES,
+    ENDPOINT_MEMORIES,
     ENDPOINT_RANDOM,
     ENDPOINT_SEARCH,
     ASSET_TYPE_IMAGE,
@@ -55,6 +56,8 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             CONF_SCAN_INTERVAL,
             config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
+
+        self.server_version: int = -1;
 
         super().__init__(
             hass,
@@ -124,6 +127,15 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
         return combined
 
+    async def _fetch_version(self, session) -> int:
+        if self.server_version == -1:
+            url = f"{self.host}/api/server/version"
+            async with session.get(url, headers=self._headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            self.server_version = data.get("major") if isinstance(data, dict) else -1
+        return self.server_version
+    
     async def _fetch_assets(self, session) -> list[dict[str, Any]]:
         """Route to the correct API call based on the configured endpoint."""
 
@@ -137,6 +149,8 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             return await self._fetch_favorites(session)
         if self.endpoint == ENDPOINT_SEARCH:
             return await self._fetch_search(session)
+        if self.endpoint == ENDPOINT_MEMORIES:
+            return await self._fetch_memories(session)
 
         raise UpdateFailed(f"Unknown endpoint configured: {self.endpoint}")
 
@@ -169,11 +183,22 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         if not self.album_id:
             _LOGGER.error("Album endpoint selected but no album_id configured")
             return []
-        url = f"{self.host}/api/albums/{self.album_id}"
-        async with session.get(url, headers=self._headers) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-        return data.get("assets", []) if isinstance(data, dict) else []
+        version = await self._fetch_version(session)
+        if version >= 3:
+            url = f"{self.host}/api/search/metadata"
+            body: dict[str, Any] = {
+                "albumIds": [self.album_id],
+            }
+            async with session.post(url, headers=self._headers, json=body) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            return data.get("assets").get("items", []) if isinstance(data, dict) else []
+        else:
+            url = f"{self.host}/api/albums/{self.album_id}"
+            async with session.get(url, headers=self._headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            return data.get("assets", []) if isinstance(data, dict) else []
 
     async def _fetch_favorites(self, session) -> list[dict[str, Any]]:
         url = f"{self.host}/api/search/metadata"
@@ -198,3 +223,25 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         return (
             data.get("assets", {}).get("items", []) if isinstance(data, dict) else []
         )
+
+    async def _fetch_memories(self, session) -> list[dict[str, Any]]:
+        url = f"{self.host}/api/memories"
+        # `for` filters memories by date; default to "now" so we get today's
+        # On-This-Day memories each refresh.
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        raw: dict[str, Any] = {"size": self.asset_count, "for": now_iso}
+        raw.update({k: v for k, v in self.api_params.items() if v not in (None, "")})
+        # aiohttp query params must be str/int/float; booleans need lowercase.
+        params: dict[str, str] = {
+            k: ("true" if v else "false") if isinstance(v, bool) else str(v)
+            for k, v in raw.items()
+        }
+        async with session.get(url, headers=self._headers, params=params) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        if not isinstance(data, list):
+            return []
+        assets: list[dict[str, Any]] = []
+        for memory in data:
+            assets.extend(memory.get("assets", []))
+        return assets

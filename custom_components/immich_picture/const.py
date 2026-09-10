@@ -27,6 +27,7 @@ ENDPOINT_ALL = "all_assets"
 ENDPOINT_ALBUM = "album_assets"
 ENDPOINT_FAVORITES = "favorite_assets"
 ENDPOINT_SEARCH = "search_metadata"
+ENDPOINT_MEMORIES = "memory_assets"
 
 # Human-readable endpoint names (used in UI)
 API_ENDPOINTS: dict[str, str] = {
@@ -35,6 +36,7 @@ API_ENDPOINTS: dict[str, str] = {
     ENDPOINT_ALBUM: "Album Assets",
     ENDPOINT_FAVORITES: "Favorite Assets",
     ENDPOINT_SEARCH: "Search by Metadata",
+    ENDPOINT_MEMORIES: "Memory Assets",
 }
 
 # Asset types supported by Immich API
