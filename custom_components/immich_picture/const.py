@@ -13,6 +13,8 @@ CONF_ROTATION_INTERVAL = "rotation_interval"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_CROSSFADE_ENABLED = "crossfade_enabled"
 CONF_CROSSFADE_DURATION = "crossfade_duration"
+CONF_ORIENTATION = "orientation"
+CONF_MISMATCH_HANDLING = "mismatch_handling"
 
 # Defaults
 DEFAULT_SCAN_INTERVAL = 300  # seconds (5 minutes)
@@ -25,6 +27,32 @@ DEFAULT_CROSSFADE_DURATION = 1.0  # seconds
 # composed on demand and memoised per step, so this bounds the work done for
 # one transition however often clients poll.
 CROSSFADE_STEPS = 20
+
+# Card orientation – which shape of photo fits the dashboard card natively
+ORIENTATION_LANDSCAPE = "landscape"
+ORIENTATION_PORTRAIT = "portrait"
+DEFAULT_ORIENTATION = ORIENTATION_LANDSCAPE
+
+ORIENTATION_OPTIONS: dict[str, str] = {
+    ORIENTATION_LANDSCAPE: "Landscape (wide card)",
+    ORIENTATION_PORTRAIT: "Portrait (tall card)",
+}
+
+# What to do with photos in the opposite orientation to the card
+MISMATCH_COMBINE = "combine"
+MISMATCH_INCLUDE = "include"
+MISMATCH_SKIP = "skip"
+DEFAULT_MISMATCH_HANDLING = MISMATCH_COMBINE
+
+MISMATCH_OPTIONS: dict[str, str] = {
+    MISMATCH_COMBINE: "Combine two into one composite",
+    MISMATCH_INCLUDE: "Show them as they are",
+    MISMATCH_SKIP: "Skip them",
+}
+
+# Axis used when compositing two photos into one
+AXIS_HORIZONTAL = "horizontal"
+AXIS_VERTICAL = "vertical"
 
 # Endpoint identifiers
 ENDPOINT_RANDOM = "random_assets"

@@ -9,7 +9,7 @@ from datetime import timedelta
 from time import monotonic
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from homeassistant.components.camera import Camera
 from homeassistant.config_entries import ConfigEntry
@@ -21,6 +21,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     API_ENDPOINTS,
+    AXIS_VERTICAL,
     CONF_API_ENDPOINT,
     CONF_CROSSFADE_DURATION,
     CONF_CROSSFADE_ENABLED,
@@ -376,38 +377,63 @@ class ImmichCamera(Camera):
 
     @staticmethod
     def _compose_blend(a: bytes, b: bytes, alpha: float) -> bytes:
-        """Blend two JPEG images, *alpha* being the weight given to *b*."""
+        """Blend two JPEG images, *alpha* being the weight given to *b*.
+
+        The two frames need not share a shape: with mixed orientations in the
+        pool a portrait photo can fade into a landscape one, so *b* is fitted
+        into *a*'s frame on black rather than stretched to it.
+        """
         img_a = Image.open(io.BytesIO(a)).convert("RGB")
         img_b = Image.open(io.BytesIO(b)).convert("RGB")
         if img_a.size != img_b.size:
-            img_b = img_b.resize(img_a.size, Image.LANCZOS)
+            img_b = ImageOps.pad(img_b, img_a.size, method=Image.LANCZOS)
         blended = Image.blend(img_a, img_b, alpha)
         buf = io.BytesIO()
         blended.save(buf, format="JPEG", quality=85)
         return buf.getvalue()
 
     @staticmethod
-    def _compose_side_by_side(left_bytes: bytes, right_bytes: bytes) -> bytes:
-        """Stitch two portrait images side-by-side into a single landscape image."""
-        left_img = Image.open(io.BytesIO(left_bytes))
-        right_img = Image.open(io.BytesIO(right_bytes))
+    def _compose_pair(first_bytes: bytes, second_bytes: bytes, axis: str) -> bytes:
+        """Stitch two images into one composite.
 
-        # Scale both images to the same height (use the smaller height)
-        target_h = min(left_img.height, right_img.height)
-        if left_img.height != target_h:
-            scale = target_h / left_img.height
-            left_img = left_img.resize(
-                (int(left_img.width * scale), target_h), Image.LANCZOS
-            )
-        if right_img.height != target_h:
-            scale = target_h / right_img.height
-            right_img = right_img.resize(
-                (int(right_img.width * scale), target_h), Image.LANCZOS
-            )
+        Portrait photos are placed side-by-side to fill a landscape card;
+        landscape photos are stacked to fill a portrait one.
+        """
+        first = Image.open(io.BytesIO(first_bytes))
+        second = Image.open(io.BytesIO(second_bytes))
 
-        combined = Image.new("RGB", (left_img.width + right_img.width, target_h))
-        combined.paste(left_img, (0, 0))
-        combined.paste(right_img, (left_img.width, 0))
+        if axis == AXIS_VERTICAL:
+            # Scale both to the same width (use the smaller width) and stack
+            target_w = min(first.width, second.width)
+            if first.width != target_w:
+                first = first.resize(
+                    (target_w, round(first.height * target_w / first.width)),
+                    Image.LANCZOS,
+                )
+            if second.width != target_w:
+                second = second.resize(
+                    (target_w, round(second.height * target_w / second.width)),
+                    Image.LANCZOS,
+                )
+            combined = Image.new("RGB", (target_w, first.height + second.height))
+            combined.paste(first, (0, 0))
+            combined.paste(second, (0, first.height))
+        else:
+            # Scale both to the same height (use the smaller height)
+            target_h = min(first.height, second.height)
+            if first.height != target_h:
+                first = first.resize(
+                    (round(first.width * target_h / first.height), target_h),
+                    Image.LANCZOS,
+                )
+            if second.height != target_h:
+                second = second.resize(
+                    (round(second.width * target_h / second.height), target_h),
+                    Image.LANCZOS,
+                )
+            combined = Image.new("RGB", (first.width + second.width, target_h))
+            combined.paste(first, (0, 0))
+            combined.paste(second, (first.width, 0))
 
         buf = io.BytesIO()
         combined.save(buf, format="JPEG", quality=85)
@@ -437,7 +463,7 @@ class ImmichCamera(Camera):
         )
 
         try:
-            if asset.get("is_portrait_pair"):
+            if asset.get("is_pair"):
                 left_id = asset["left"]["id"]
                 right_id = asset["right"]["id"]
                 left_bytes = await self._fetch_single_thumbnail(left_id)
@@ -445,7 +471,10 @@ class ImmichCamera(Camera):
 
                 if left_bytes and right_bytes:
                     data = await self.hass.async_add_executor_job(
-                        self._compose_side_by_side, left_bytes, right_bytes
+                        self._compose_pair,
+                        left_bytes,
+                        right_bytes,
+                        asset.get("pair_axis"),
                     )
                     if cache_file is not None:
                         await self.hass.async_add_executor_job(
@@ -454,7 +483,7 @@ class ImmichCamera(Camera):
                     return data
 
                 _LOGGER.warning(
-                    "Could not fetch both portrait thumbnails for pair %s",
+                    "Could not fetch both thumbnails for pair %s",
                     asset_id,
                 )
                 return await self._read_cache_bytes(cache_file)

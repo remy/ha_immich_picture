@@ -32,11 +32,15 @@ from .const import (
     CONF_CROSSFADE_DURATION,
     CONF_CROSSFADE_ENABLED,
     CONF_HOST,
+    CONF_MISMATCH_HANDLING,
+    CONF_ORIENTATION,
     CONF_ROTATION_INTERVAL,
     CONF_SCAN_INTERVAL,
     DEFAULT_ASSET_COUNT,
     DEFAULT_CROSSFADE_DURATION,
     DEFAULT_CROSSFADE_ENABLED,
+    DEFAULT_MISMATCH_HANDLING,
+    DEFAULT_ORIENTATION,
     DEFAULT_ROTATION_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -47,6 +51,8 @@ from .const import (
     ENDPOINT_RANDOM,
     ENDPOINT_SEARCH,
     API_ENDPOINTS,
+    MISMATCH_OPTIONS,
+    ORIENTATION_OPTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,6 +67,33 @@ def _number_selector(min_val: int, max_val: int, step: int = 1) -> NumberSelecto
             mode=NumberSelectorMode.BOX,
         )
     )
+
+
+def _layout_schema_dict(
+    orientation: str = DEFAULT_ORIENTATION,
+    mismatch_handling: str = DEFAULT_MISMATCH_HANDLING,
+) -> dict[Any, Any]:
+    """Schema fragment for the card orientation settings."""
+    return {
+        vol.Required(CONF_ORIENTATION, default=orientation): SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(value=k, label=v)
+                    for k, v in ORIENTATION_OPTIONS.items()
+                ]
+            )
+        ),
+        vol.Required(
+            CONF_MISMATCH_HANDLING, default=mismatch_handling
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(value=k, label=v)
+                    for k, v in MISMATCH_OPTIONS.items()
+                ]
+            )
+        ),
+    }
 
 
 class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -441,16 +474,11 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.FlowResult:
         """Ask how often to rotate images and refresh asset data."""
         if user_input is not None:
-            data = {
-                CONF_HOST: self._host,
-                CONF_API_KEY: self._api_key,
-                CONF_API_ENDPOINT: self._endpoint,
-                CONF_ROTATION_INTERVAL: int(user_input[CONF_ROTATION_INTERVAL]),
-                CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
-                **self._collected,
-            }
-            title = API_ENDPOINTS.get(self._endpoint, "Immich")
-            return self.async_create_entry(title=title, data=data)
+            self._collected[CONF_ROTATION_INTERVAL] = int(
+                user_input[CONF_ROTATION_INTERVAL]
+            )
+            self._collected[CONF_SCAN_INTERVAL] = int(user_input[CONF_SCAN_INTERVAL])
+            return await self.async_step_layout()
 
         return self.async_show_form(
             step_id="intervals",
@@ -464,6 +492,31 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): _number_selector(60, 86400),
                 }
             ),
+        )
+
+    # ------------------------------------------------------------------
+    # Step 5 – card orientation
+    # ------------------------------------------------------------------
+
+    async def async_step_layout(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Ask which way round the card is and how to treat the other shape."""
+        if user_input is not None:
+            data = {
+                CONF_HOST: self._host,
+                CONF_API_KEY: self._api_key,
+                CONF_API_ENDPOINT: self._endpoint,
+                CONF_ORIENTATION: user_input[CONF_ORIENTATION],
+                CONF_MISMATCH_HANDLING: user_input[CONF_MISMATCH_HANDLING],
+                **self._collected,
+            }
+            title = API_ENDPOINTS.get(self._endpoint, "Immich")
+            return self.async_create_entry(title=title, data=data)
+
+        return self.async_show_form(
+            step_id="layout",
+            data_schema=vol.Schema(_layout_schema_dict()),
         )
 
     # ------------------------------------------------------------------
@@ -551,6 +604,8 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_CROSSFADE_DURATION, DEFAULT_CROSSFADE_DURATION
                     )
                 ),
+                CONF_ORIENTATION: user_input[CONF_ORIENTATION],
+                CONF_MISMATCH_HANDLING: user_input[CONF_MISMATCH_HANDLING],
             }
             if has_json:
                 raw = user_input.get(CONF_API_PARAMS, "{}").strip() or "{}"
@@ -597,6 +652,10 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
                 NumberSelectorConfig(
                     min=0.2, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
                 )
+            ),
+            **_layout_schema_dict(
+                current.get(CONF_ORIENTATION, DEFAULT_ORIENTATION),
+                current.get(CONF_MISMATCH_HANDLING, DEFAULT_MISMATCH_HANDLING),
             ),
         }
 
