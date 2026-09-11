@@ -20,6 +20,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     API_ENDPOINTS,
+    AXIS_VERTICAL,
     CONF_API_ENDPOINT,
     CONF_ROTATION_INTERVAL,
     DEFAULT_ROTATION_INTERVAL,
@@ -230,27 +231,47 @@ class ImmichCamera(Camera):
             return None
 
     @staticmethod
-    def _compose_side_by_side(left_bytes: bytes, right_bytes: bytes) -> bytes:
-        """Stitch two portrait images side-by-side into a single landscape image."""
-        left_img = Image.open(io.BytesIO(left_bytes))
-        right_img = Image.open(io.BytesIO(right_bytes))
+    def _compose_pair(first_bytes: bytes, second_bytes: bytes, axis: str) -> bytes:
+        """Stitch two images into one composite.
 
-        # Scale both images to the same height (use the smaller height)
-        target_h = min(left_img.height, right_img.height)
-        if left_img.height != target_h:
-            scale = target_h / left_img.height
-            left_img = left_img.resize(
-                (int(left_img.width * scale), target_h), Image.LANCZOS
-            )
-        if right_img.height != target_h:
-            scale = target_h / right_img.height
-            right_img = right_img.resize(
-                (int(right_img.width * scale), target_h), Image.LANCZOS
-            )
+        Portrait photos are placed side-by-side to fill a landscape card;
+        landscape photos are stacked to fill a portrait one.
+        """
+        first = Image.open(io.BytesIO(first_bytes))
+        second = Image.open(io.BytesIO(second_bytes))
 
-        combined = Image.new("RGB", (left_img.width + right_img.width, target_h))
-        combined.paste(left_img, (0, 0))
-        combined.paste(right_img, (left_img.width, 0))
+        if axis == AXIS_VERTICAL:
+            # Scale both to the same width (use the smaller width) and stack
+            target_w = min(first.width, second.width)
+            if first.width != target_w:
+                first = first.resize(
+                    (target_w, round(first.height * target_w / first.width)),
+                    Image.LANCZOS,
+                )
+            if second.width != target_w:
+                second = second.resize(
+                    (target_w, round(second.height * target_w / second.width)),
+                    Image.LANCZOS,
+                )
+            combined = Image.new("RGB", (target_w, first.height + second.height))
+            combined.paste(first, (0, 0))
+            combined.paste(second, (0, first.height))
+        else:
+            # Scale both to the same height (use the smaller height)
+            target_h = min(first.height, second.height)
+            if first.height != target_h:
+                first = first.resize(
+                    (round(first.width * target_h / first.height), target_h),
+                    Image.LANCZOS,
+                )
+            if second.height != target_h:
+                second = second.resize(
+                    (round(second.width * target_h / second.height), target_h),
+                    Image.LANCZOS,
+                )
+            combined = Image.new("RGB", (first.width + second.width, target_h))
+            combined.paste(first, (0, 0))
+            combined.paste(second, (first.width, 0))
 
         buf = io.BytesIO()
         combined.save(buf, format="JPEG", quality=85)
@@ -279,8 +300,8 @@ class ImmichCamera(Camera):
         )
 
         try:
-            if asset.get("is_portrait_pair"):
-                # Fetch both portrait images and composite them
+            if asset.get("is_pair"):
+                # Fetch both halves of the pair and composite them
                 left_id = asset["left"]["id"]
                 right_id = asset["right"]["id"]
                 left_bytes = await self._fetch_single_thumbnail(left_id)
@@ -288,7 +309,10 @@ class ImmichCamera(Camera):
 
                 if left_bytes and right_bytes:
                     data = await self.hass.async_add_executor_job(
-                        self._compose_side_by_side, left_bytes, right_bytes
+                        self._compose_pair,
+                        left_bytes,
+                        right_bytes,
+                        asset.get("pair_axis"),
                     )
                     self._current_image_bytes = data
                     if cache_file is not None:
@@ -297,12 +321,12 @@ class ImmichCamera(Camera):
                         )
                 else:
                     _LOGGER.warning(
-                        "Could not fetch both portrait thumbnails for pair %s",
+                        "Could not fetch both thumbnails for pair %s",
                         asset_id,
                     )
                     await self._serve_from_cache(cache_file)
             else:
-                # Single landscape image
+                # Single image served as-is
                 data = await self._fetch_single_thumbnail(asset_id)
                 if data:
                     self._current_image_bytes = data

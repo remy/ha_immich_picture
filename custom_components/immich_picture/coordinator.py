@@ -12,14 +12,20 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    AXIS_HORIZONTAL,
+    AXIS_VERTICAL,
     CONF_ALBUM_ID,
     CONF_API_ENDPOINT,
     CONF_API_PARAMS,
     CONF_ASSET_COUNT,
     CONF_HOST,
     CONF_API_KEY,
+    CONF_MISMATCH_HANDLING,
+    CONF_ORIENTATION,
     CONF_SCAN_INTERVAL,
     DEFAULT_ASSET_COUNT,
+    DEFAULT_MISMATCH_HANDLING,
+    DEFAULT_ORIENTATION,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     ENDPOINT_ALL,
@@ -29,6 +35,9 @@ from .const import (
     ENDPOINT_RANDOM,
     ENDPOINT_SEARCH,
     ASSET_TYPE_IMAGE,
+    MISMATCH_COMBINE,
+    MISMATCH_INCLUDE,
+    ORIENTATION_PORTRAIT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,6 +55,14 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self.asset_count: int = config_entry.options.get(
             CONF_ASSET_COUNT,
             config_entry.data.get(CONF_ASSET_COUNT, DEFAULT_ASSET_COUNT),
+        )
+        self.orientation: str = config_entry.options.get(
+            CONF_ORIENTATION,
+            config_entry.data.get(CONF_ORIENTATION, DEFAULT_ORIENTATION),
+        )
+        self.mismatch_handling: str = config_entry.options.get(
+            CONF_MISMATCH_HANDLING,
+            config_entry.data.get(CONF_MISMATCH_HANDLING, DEFAULT_MISMATCH_HANDLING),
         )
         self.api_params: dict[str, Any] = config_entry.options.get(
             CONF_API_PARAMS,
@@ -86,7 +103,7 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         # (Videos cannot be served as still images.)
         image_assets = [a for a in assets if a.get("type") == ASSET_TYPE_IMAGE]
 
-        # Separate landscape and portrait images.
+        # Separate landscape and portrait images (square counts as portrait).
         landscape_assets = []
         portrait_assets = []
         for a in image_assets:
@@ -99,25 +116,20 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             else:
                 portrait_assets.append(a)
 
-        # Pair up portrait images side-by-side to form landscape composites.
-        portrait_pairs: list[dict[str, Any]] = []
-        for i in range(0, len(portrait_assets) - 1, 2):
-            left = portrait_assets[i]
-            right = portrait_assets[i + 1]
-            portrait_pairs.append({
-                "is_portrait_pair": True,
-                "left": left,
-                "right": right,
-                "id": f"{left['id']}_{right['id']}",
-                "originalFileName": (
-                    f"{left.get('originalFileName', '')} + "
-                    f"{right.get('originalFileName', '')}"
-                ),
-                "localDateTime": left.get("localDateTime"),
-                "fileCreatedAt": left.get("fileCreatedAt"),
-            })
+        # Photos matching the card orientation are served as-is; the rest are
+        # combined, shown as they are, or dropped, depending on the option.
+        if self.orientation == ORIENTATION_PORTRAIT:
+            matching, mismatched = portrait_assets, landscape_assets
+            axis = AXIS_VERTICAL
+        else:
+            matching, mismatched = landscape_assets, portrait_assets
+            axis = AXIS_HORIZONTAL
 
-        combined = landscape_assets + portrait_pairs
+        combined = list(matching)
+        if self.mismatch_handling == MISMATCH_INCLUDE:
+            combined += mismatched
+        elif self.mismatch_handling == MISMATCH_COMBINE:
+            combined += self._make_pairs(mismatched, axis)
 
         if not combined:
             _LOGGER.warning(
@@ -126,6 +138,32 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
             )
 
         return combined
+
+    @staticmethod
+    def _make_pairs(assets: list[dict[str, Any]], axis: str) -> list[dict[str, Any]]:
+        """Combine assets two at a time into composite pseudo-assets.
+
+        An odd trailing asset is dropped — on its own it would letterbox the
+        card, which is what pairing exists to avoid.
+        """
+        pairs: list[dict[str, Any]] = []
+        for i in range(0, len(assets) - 1, 2):
+            first = assets[i]
+            second = assets[i + 1]
+            pairs.append({
+                "is_pair": True,
+                "pair_axis": axis,
+                "left": first,
+                "right": second,
+                "id": f"{first['id']}_{second['id']}",
+                "originalFileName": (
+                    f"{first.get('originalFileName', '')} + "
+                    f"{second.get('originalFileName', '')}"
+                ),
+                "localDateTime": first.get("localDateTime"),
+                "fileCreatedAt": first.get("fileCreatedAt"),
+            })
+        return pairs
 
     async def _fetch_version(self, session) -> int:
         if self.server_version == -1:

@@ -11,11 +11,39 @@ CONF_ALBUM_ID = "album_id"
 CONF_ASSET_COUNT = "asset_count"
 CONF_ROTATION_INTERVAL = "rotation_interval"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_ORIENTATION = "orientation"
+CONF_MISMATCH_HANDLING = "mismatch_handling"
 
 # Defaults
 DEFAULT_SCAN_INTERVAL = 300  # seconds (5 minutes)
 DEFAULT_ROTATION_INTERVAL = 30  # seconds
 DEFAULT_ASSET_COUNT = 50
+
+# Card orientation – which shape of photo fits the dashboard card natively
+ORIENTATION_LANDSCAPE = "landscape"
+ORIENTATION_PORTRAIT = "portrait"
+DEFAULT_ORIENTATION = ORIENTATION_LANDSCAPE
+
+ORIENTATION_OPTIONS: dict[str, str] = {
+    ORIENTATION_LANDSCAPE: "Landscape (wide card)",
+    ORIENTATION_PORTRAIT: "Portrait (tall card)",
+}
+
+# What to do with photos in the opposite orientation to the card
+MISMATCH_COMBINE = "combine"
+MISMATCH_INCLUDE = "include"
+MISMATCH_SKIP = "skip"
+DEFAULT_MISMATCH_HANDLING = MISMATCH_COMBINE
+
+MISMATCH_OPTIONS: dict[str, str] = {
+    MISMATCH_COMBINE: "Combine two into one composite",
+    MISMATCH_INCLUDE: "Show them as they are",
+    MISMATCH_SKIP: "Skip them",
+}
+
+# Axis used when compositing two photos into one
+AXIS_HORIZONTAL = "horizontal"
+AXIS_VERTICAL = "vertical"
 
 # Endpoint identifiers
 ENDPOINT_RANDOM = "random_assets"

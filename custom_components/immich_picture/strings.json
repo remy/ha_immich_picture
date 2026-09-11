@@ -85,6 +85,14 @@
           "rotation_interval": "Photo rotation interval (seconds)",
           "scan_interval": "API refresh interval (seconds)"
         }
+      },
+      "layout": {
+        "title": "Card Orientation",
+        "description": "Tell the integration which way round the dashboard card is. Photos matching that shape are shown as they are; photos of the other shape can be combined two at a time into one composite (portraits side-by-side, landscapes stacked), shown as they are, or skipped altogether.",
+        "data": {
+          "orientation": "Card orientation",
+          "mismatch_handling": "Photos of the other shape"
+        }
       }
     },
     "error": {
@@ -106,10 +114,14 @@
           "rotation_interval": "Photo rotation interval (seconds)",
           "scan_interval": "API refresh interval (seconds)",
           "asset_count": "Number of assets to load",
-          "api_params": "Filter (JSON)"
+          "api_params": "Filter (JSON)",
+          "orientation": "Card orientation",
+          "mismatch_handling": "Photos of the other shape"
         },
         "data_description": {
-          "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields."
+          "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields.",
+          "orientation": "The shape of the dashboard card the slideshow is shown in.",
+          "mismatch_handling": "What to do with photos that do not match the card orientation: combine two into one composite (portraits side-by-side, landscapes stacked), show them as they are, or skip them."
         }
       }
     }
