@@ -114,11 +114,15 @@
           "rotation_interval": "Photo rotation interval (seconds)",
           "scan_interval": "API refresh interval (seconds)",
           "asset_count": "Number of assets to load",
+          "crossfade_enabled": "Enable crossfade dissolve",
+          "crossfade_duration": "Crossfade duration (seconds)",
           "api_params": "Filter (JSON)",
           "orientation": "Card orientation",
           "mismatch_handling": "Photos of the other shape"
         },
         "data_description": {
+          "crossfade_enabled": "Dissolve one photo into the next instead of cutting straight to it. The blend is rendered as your dashboard refreshes the image, so how smooth it looks depends on how often the client polls.",
+          "crossfade_duration": "How long the dissolve takes. Capped at the rotation interval.",
           "api_params": "JSON body sent with each API request. See [API documentation]({docs_url}) for available fields.",
           "orientation": "The shape of the dashboard card the slideshow is shown in.",
           "mismatch_handling": "What to do with photos that do not match the card orientation: combine two into one composite (portraits side-by-side, landscapes stacked), show them as they are, or skip them."

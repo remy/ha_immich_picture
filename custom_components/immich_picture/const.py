@@ -11,6 +11,8 @@ CONF_ALBUM_ID = "album_id"
 CONF_ASSET_COUNT = "asset_count"
 CONF_ROTATION_INTERVAL = "rotation_interval"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_CROSSFADE_ENABLED = "crossfade_enabled"
+CONF_CROSSFADE_DURATION = "crossfade_duration"
 CONF_ORIENTATION = "orientation"
 CONF_MISMATCH_HANDLING = "mismatch_handling"
 
@@ -18,6 +20,13 @@ CONF_MISMATCH_HANDLING = "mismatch_handling"
 DEFAULT_SCAN_INTERVAL = 300  # seconds (5 minutes)
 DEFAULT_ROTATION_INTERVAL = 30  # seconds
 DEFAULT_ASSET_COUNT = 50
+DEFAULT_CROSSFADE_ENABLED = False
+DEFAULT_CROSSFADE_DURATION = 1.0  # seconds
+
+# Number of discrete opacity steps a crossfade is quantised into.  Blends are
+# composed on demand and memoised per step, so this bounds the work done for
+# one transition however often clients poll.
+CROSSFADE_STEPS = 20
 
 # Card orientation – which shape of photo fits the dashboard card natively
 ORIENTATION_LANDSCAPE = "landscape"

@@ -10,6 +10,7 @@ A Home Assistant custom integration that turns your [Immich](https://immich.app)
 - **Filterable random & search** – POST a JSON body to the Immich API to narrow results by person, city, date range, type, and more
 - **Configurable rotation** – set how often the displayed photo changes (5 s – 1 h)
 - **Configurable refresh** – set how often a fresh batch of assets is fetched from Immich (1 min – 24 h)
+- **Optional crossfade** – dissolve one photo into the next; blends are composed on demand, so smoothness follows the client's own image refresh rate
 - **Resilient image cache** – every downloaded thumbnail is written to disk; if Immich is unreachable the last cached version of each photo is served instead
 - **Multiple instances** – add the integration more than once to run several slideshows (e.g. one per album or one per room) simultaneously
 - **Card orientation** – tell the integration whether the card is landscape or portrait, and whether photos of the other shape are combined two at a time into one composite, shown as they are, or skipped
@@ -143,6 +144,8 @@ After initial setup you can adjust the following via the **configure** button wi
 | Photo rotation interval | How often the displayed image advances | 5 s – 3600 s |
 | API refresh interval | How often a fresh batch is fetched from Immich | 60 s – 86400 s |
 | Number of assets | Size of the asset pool loaded per refresh | 1 – 500 |
+| Enable crossfade dissolve | Fade between photos instead of cutting | on / off |
+| Crossfade duration | How long the dissolve takes, capped at the rotation interval | 0.2 s – 5 s |
 | Card orientation | Shape of the dashboard card the slideshow sits in | landscape, portrait |
 | Photos of the other shape | What to do with photos that do not match the card | combine, show as-is, skip |
 | Filter (JSON) | JSON body for the API request *(random & search only)* | any valid JSON object |
