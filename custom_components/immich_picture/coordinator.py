@@ -23,10 +23,12 @@ from .const import (
     CONF_MISMATCH_HANDLING,
     CONF_ORIENTATION,
     CONF_SCAN_INTERVAL,
+    CONF_VERIFY_SSL,
     DEFAULT_ASSET_COUNT,
     DEFAULT_MISMATCH_HANDLING,
     DEFAULT_ORIENTATION,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_VERIFY_SSL,
     DOMAIN,
     ENDPOINT_ALL,
     ENDPOINT_ALBUM,
@@ -50,6 +52,10 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         """Initialise the coordinator."""
         self.host: str = config_entry.data[CONF_HOST].rstrip("/")
         self.api_key: str = config_entry.data[CONF_API_KEY]
+        self.verify_ssl: bool = config_entry.options.get(
+            CONF_VERIFY_SSL,
+            config_entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+        )
         self.endpoint: str = config_entry.data[CONF_API_ENDPOINT]
         self.album_id: str | None = config_entry.data.get(CONF_ALBUM_ID)
         self.asset_count: int = config_entry.options.get(
@@ -92,7 +98,7 @@ class ImmichDataUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
         """Fetch the current asset list from Immich."""
-        session = async_get_clientsession(self.hass)
+        session = async_get_clientsession(self.hass, self.verify_ssl)
 
         try:
             assets = await self._fetch_assets(session)
