@@ -36,6 +36,7 @@ from .const import (
     CONF_ORIENTATION,
     CONF_ROTATION_INTERVAL,
     CONF_SCAN_INTERVAL,
+    CONF_VERIFY_SSL,
     DEFAULT_ASSET_COUNT,
     DEFAULT_CROSSFADE_DURATION,
     DEFAULT_CROSSFADE_ENABLED,
@@ -43,6 +44,7 @@ from .const import (
     DEFAULT_ORIENTATION,
     DEFAULT_ROTATION_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_VERIFY_SSL,
     DOMAIN,
     ENDPOINT_ALBUM,
     ENDPOINT_ALL,
@@ -105,6 +107,7 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialise flow state."""
         self._host: str = ""
         self._api_key: str = ""
+        self._verify_ssl: bool = DEFAULT_VERIFY_SSL
         self._endpoint: str = ""
         self._albums: list[dict[str, Any]] = []
         self._collected: dict[str, Any] = {}
@@ -122,13 +125,15 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].rstrip("/")
             api_key = user_input[CONF_API_KEY]
+            verify_ssl = user_input.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
 
-            error = await self._test_credentials(host, api_key)
+            error = await self._test_credentials(host, api_key, verify_ssl)
             if error:
                 errors["base"] = error
             else:
                 self._host = host
                 self._api_key = api_key
+                self._verify_ssl = verify_ssl
                 return await self.async_step_endpoint()
 
         # Pre-populate from an existing entry so the user doesn't have to
@@ -154,6 +159,9 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
+                    vol.Required(
+                        CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL
+                    ): BooleanSelector(),
                 }
             ),
             errors=errors,
@@ -506,6 +514,7 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data = {
                 CONF_HOST: self._host,
                 CONF_API_KEY: self._api_key,
+                CONF_VERIFY_SSL: self._verify_ssl,
                 CONF_API_ENDPOINT: self._endpoint,
                 CONF_ORIENTATION: user_input[CONF_ORIENTATION],
                 CONF_MISMATCH_HANDLING: user_input[CONF_MISMATCH_HANDLING],
@@ -535,9 +544,11 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # Helpers
     # ------------------------------------------------------------------
 
-    async def _test_credentials(self, host: str, api_key: str) -> str | None:
+    async def _test_credentials(
+        self, host: str, api_key: str, verify_ssl: bool
+    ) -> str | None:
         """Return an error key string, or None on success."""
-        session = async_get_clientsession(self.hass)
+        session = async_get_clientsession(self.hass, verify_ssl)
         try:
             async with session.get(
                 f"{host}/api/server/ping",
@@ -554,7 +565,7 @@ class ImmichConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _fetch_albums(self) -> list[dict[str, Any]]:
         """Fetch the list of albums from the Immich API."""
-        session = async_get_clientsession(self.hass)
+        session = async_get_clientsession(self.hass, self._verify_ssl)
         async with session.get(
             f"{self._host}/api/albums",
             headers={"x-api-key": self._api_key, "Accept": "application/json"},
@@ -606,6 +617,14 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 CONF_ORIENTATION: user_input[CONF_ORIENTATION],
                 CONF_MISMATCH_HANDLING: user_input[CONF_MISMATCH_HANDLING],
+                CONF_VERIFY_SSL: bool(
+                    user_input.get(
+                        CONF_VERIFY_SSL,
+                        self._config_entry.data.get(
+                            CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL
+                        ),
+                    )
+                ),
             }
             if has_json:
                 raw = user_input.get(CONF_API_PARAMS, "{}").strip() or "{}"
@@ -653,6 +672,10 @@ class ImmichOptionsFlowHandler(config_entries.OptionsFlow):
                     min=0.2, max=5.0, step=0.1, mode=NumberSelectorMode.BOX
                 )
             ),
+            vol.Required(
+                CONF_VERIFY_SSL,
+                default=current.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL),
+            ): BooleanSelector(),
             **_layout_schema_dict(
                 current.get(CONF_ORIENTATION, DEFAULT_ORIENTATION),
                 current.get(CONF_MISMATCH_HANDLING, DEFAULT_MISMATCH_HANDLING),

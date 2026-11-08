@@ -5,6 +5,7 @@ DOMAIN = "immich_picture"
 # Config entry keys
 CONF_API_KEY = "api_key"
 CONF_HOST = "host"
+CONF_VERIFY_SSL = "verify_ssl"
 CONF_API_ENDPOINT = "api_endpoint"
 CONF_API_PARAMS = "api_params"
 CONF_ALBUM_ID = "album_id"
@@ -20,6 +21,7 @@ CONF_MISMATCH_HANDLING = "mismatch_handling"
 DEFAULT_SCAN_INTERVAL = 300  # seconds (5 minutes)
 DEFAULT_ROTATION_INTERVAL = 30  # seconds
 DEFAULT_ASSET_COUNT = 50
+DEFAULT_VERIFY_SSL = True
 DEFAULT_CROSSFADE_ENABLED = False
 DEFAULT_CROSSFADE_DURATION = 1.0  # seconds
 

@@ -360,7 +360,7 @@ class ImmichCamera(Camera):
             f"{self._coordinator.host}/api/assets/{asset_id}/thumbnail"
             "?size=preview&edited=true"
         )
-        session = async_get_clientsession(self.hass)
+        session = async_get_clientsession(self.hass, self._coordinator.verify_ssl)
         async with session.get(
             url,
             headers={"x-api-key": self._coordinator.api_key},

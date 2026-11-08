@@ -54,10 +54,11 @@ The following permissions are needed for all the five photo sources to work:
 
 1. Go to **Settings → Devices & Services → Add Integration** and search for **Immich Picture**
 2. Enter your Immich URL (e.g. `http://192.168.1.100:2283`) and API key
-3. Choose a **photo source** (see below)
-4. Configure source-specific options (asset count, JSON filter, etc.)
-5. Set rotation and refresh intervals
-6. The integration creates a `camera` entity ready to use on any dashboard
+3. Keep **Verify SSL certificate** enabled (including when using a reverse proxy with a trusted HTTPS certificate)
+4. Choose a **photo source** (see below)
+5. Configure source-specific options (asset count, JSON filter, etc.)
+6. Set rotation and refresh intervals
+7. The integration creates a `camera` entity ready to use on any dashboard
 
 ---
 
@@ -149,6 +150,7 @@ After initial setup you can adjust the following via the **configure** button wi
 | Card orientation | Shape of the dashboard card the slideshow sits in | landscape, portrait |
 | Photos of the other shape | What to do with photos that do not match the card | combine, show as-is, skip |
 | Filter (JSON) | JSON body for the API request *(random & search only)* | any valid JSON object |
+| Verify SSL certificate | Validate Immich's HTTPS certificate; disable only if Home Assistant does not trust it | on / off |
 
 Changes take effect immediately — the integration reloads automatically when you save.
 
